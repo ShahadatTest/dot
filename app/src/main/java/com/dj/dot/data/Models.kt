@@ -1,7 +1,9 @@
 package com.dj.dot.data
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 
+@Immutable
 data class Song(
     val id: Long,
     val title: String,
@@ -17,14 +19,19 @@ data class Song(
     val uri: Uri,
 )
 
+@Immutable
 data class Album(val id: Long, val title: String, val artist: String, val year: Int, val songs: List<Song>)
 
+@Immutable
 data class Artist(val name: String, val songs: List<Song>, val albumCount: Int)
 
+@Immutable
 data class Folder(val path: String, val name: String, val songs: List<Song>)
 
+@Immutable
 data class Playlist(val id: String, val name: String, val songIds: List<Long>)
 
+@Immutable
 data class LibraryData(
     val songs: List<Song> = emptyList(),
     val albums: List<Album> = emptyList(),
