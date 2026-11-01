@@ -1,0 +1,18 @@
+Dot
+Copyright 2026 Dhananjay Aggarwal
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It includes or uses the following third-party software and assets:
+
+- AndroidX, Jetpack Compose and Media3, Copyright The Android Open Source Project,
+  licensed under the Apache License, Version 2.0.
+- Kotlin and kotlinx.coroutines, Copyright JetBrains s.r.o. and contributors,
+  licensed under the Apache License, Version 2.0.
+- Doto, Copyright The Doto Project Authors, licensed under the SIL Open Font License 1.1.
+  The bundled copy is subset and instanced to a single style.
+- Space Mono, Copyright The Space Mono Project Authors, licensed under the SIL Open Font
+  License 1.1. The bundled copies are subset to Latin.
+
+The Nothing Glyph Developer Kit is not distributed with this source code. It is downloaded
+from Nothing's official repository at build time and remains subject to Nothing's terms.
