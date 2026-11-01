@@ -69,8 +69,8 @@ class VizState(val bands: Int, wavePoints: Int) {
 fun rememberVizState(spectrum: Spectrum, playing: Boolean): VizState {
     val state = remember { VizState(spectrum.bands, spectrum.wavePoints) }
     DisposableEffect(Unit) {
-        spectrum.enabled = true
-        onDispose { spectrum.enabled = false }
+        spectrum.acquire()
+        onDispose { spectrum.release() }
     }
     LaunchedEffect(playing) {
         var lastAudible = System.nanoTime() - AUDIO_LATENCY_NS

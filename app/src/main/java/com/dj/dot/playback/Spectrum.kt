@@ -19,7 +19,7 @@ import kotlin.math.sqrt
 /**
  * Taps decoded PCM straight out of ExoPlayer (no RECORD_AUDIO permission needed) and turns it
  * into [bands] log-spaced levels for the dot-matrix visualizer, plus beat onsets and a tempo
- * estimate. Only does work while [enabled].
+ * estimate. Only does work while someone has called [acquire].
  *
  * Beats use spectral flux: the summed *increase* in (log) magnitude since the previous frame,
  * weighted towards the kick-drum range. A beat fires when the flux is a local rise that clears
@@ -27,7 +27,11 @@ import kotlin.math.sqrt
  */
 @OptIn(UnstableApi::class)
 class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
-    @Volatile var enabled = false
+    private val users = java.util.concurrent.atomic.AtomicInteger(0)
+    /** True while at least one visualizer or the Glyph lights is listening. */
+    val enabled: Boolean get() = users.get() > 0
+    fun acquire() { users.incrementAndGet() }
+    fun release() { users.updateAndGet { (it - 1).coerceAtLeast(0) } }
 
     private val n = 1024
     private val window = FloatArray(n) { (0.5 - 0.5 * cos(2 * PI * it / (n - 1))).toFloat() }
