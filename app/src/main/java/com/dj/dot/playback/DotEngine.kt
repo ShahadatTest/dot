@@ -103,7 +103,8 @@ class DotEngine(
     private val players = arrayOf(newPlayer(), newPlayer())
     private var a = 0
     private val active: ExoPlayer get() = players[a]
-    private var items: List<MediaItem> = emptyList()
+    /** Mirrors the active player's playlist; edited in place so queue changes stay O(change). */
+    private var items: MutableList<MediaItem> = ArrayList()
     private var originalQueue: List<Song>? = null
 
     // Final volume of each player = gain[i] * master * duck.
@@ -379,28 +380,34 @@ class DotEngine(
     fun playNext(songs: List<Song>) {
         if (items.isEmpty()) return playSongs(songs)
         val at = _state.value.index + 1
-        setQueue(_state.value.queue.toMutableList().apply { addAll(at, songs) })
-        active.addMediaItems(at, songs.map { it.toMediaItem() })
+        val added = songs.map { it.toMediaItem() }
+        items.addAll(at, added)
+        _state.value = _state.value.copy(queue = _state.value.queue.toMutableList().apply { addAll(at, songs) })
+        active.addMediaItems(at, added)
         publish()
     }
 
     fun addToQueue(songs: List<Song>) {
         if (items.isEmpty()) return playSongs(songs)
-        setQueue(_state.value.queue + songs)
-        active.addMediaItems(songs.map { it.toMediaItem() })
+        val added = songs.map { it.toMediaItem() }
+        items.addAll(added)
+        _state.value = _state.value.copy(queue = _state.value.queue + songs)
+        active.addMediaItems(added)
         publish()
     }
 
     fun removeFromQueue(index: Int) {
         if (index == _state.value.index || index !in items.indices) return
-        setQueue(_state.value.queue.filterIndexed { i, _ -> i != index })
+        items.removeAt(index)
+        _state.value = _state.value.copy(queue = _state.value.queue.toMutableList().apply { removeAt(index) })
         active.removeMediaItem(index)
         publish()
     }
 
     fun moveInQueue(from: Int, to: Int) {
         if (from !in items.indices || to !in items.indices || from == to) return
-        setQueue(_state.value.queue.toMutableList().apply { add(to, removeAt(from)) })
+        items.add(to, items.removeAt(from))
+        _state.value = _state.value.copy(queue = _state.value.queue.toMutableList().apply { add(to, removeAt(from)) })
         active.moveMediaItem(from, to)
         publish()
     }
@@ -595,7 +602,7 @@ class DotEngine(
     }
 
     private fun setQueue(list: List<Song>) {
-        items = list.map { it.toMediaItem() }
+        items = list.mapTo(ArrayList(list.size)) { it.toMediaItem() }
         _state.value = _state.value.copy(queue = list)
     }
 
