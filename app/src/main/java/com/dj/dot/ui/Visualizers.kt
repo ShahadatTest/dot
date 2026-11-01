@@ -296,10 +296,23 @@ private fun buildHalftone(source: Bitmap?, grid: Int): Halftone {
         return Halftone(grid, colors, sizes)
     }
 
-    // Centre-crop to a square, then halve repeatedly so each dot averages its whole cell.
-    var bmp = source.copy(Bitmap.Config.ARGB_8888, false)
-    val side = min(bmp.width, bmp.height)
-    bmp = Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side)
+    // Fit the whole cover into a square (wide covers get bars, nothing is cropped), then halve
+    // repeatedly so each dot averages its whole cell.
+    val src = source.copy(Bitmap.Config.ARGB_8888, false)
+    val side = kotlin.math.max(src.width, src.height)
+    var bmp = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+    val left = (side - src.width) / 2
+    val top = (side - src.height) / 2
+    android.graphics.Canvas(bmp).apply {
+        drawColor(android.graphics.Color.BLACK)
+        drawBitmap(src, left.toFloat(), top.toFloat(), android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG))
+    }
+    // Grid cells that fall in the bars, so they can be drawn as a faint backdrop instead.
+    val inside = { x: Int, y: Int ->
+        val sx = (x + 0.5f) * side / grid
+        val sy = (y + 0.5f) * side / grid
+        sx >= left && sx < left + src.width && sy >= top && sy < top + src.height
+    }
     var w = side
     while (w / 2 >= grid * 2) {
         w /= 2
@@ -313,13 +326,20 @@ private fun buildHalftone(source: Bitmap?, grid: Int): Halftone {
         val c = px[i]
         (0.299f * (c shr 16 and 0xFF) + 0.587f * (c shr 8 and 0xFF) + 0.114f * (c and 0xFF)) / 255f
     }
-    // Auto-levels on the 3rd..98th percentile so dark or washed-out covers still read.
-    val sorted = lum.sortedArray()
+    val content = BooleanArray(px.size) { i -> inside(i % grid, i / grid) }
+    // Auto-levels on the 3rd..98th percentile of the cover itself so dark or washed-out art still reads.
+    val coverLum = lum.filterIndexed { i, _ -> content[i] }.toFloatArray()
+    val sorted = (if (coverLum.isNotEmpty()) coverLum else lum.copyOf()).also { it.sort() }
     val lo = sorted[(sorted.size * 0.03f).toInt()]
     val hi = sorted[(sorted.size * 0.98f).toInt().coerceAtMost(sorted.lastIndex)].coerceAtLeast(lo + 0.05f)
 
     val hsv = FloatArray(3)
     for (i in px.indices) {
+        if (!content[i]) {
+            sizes[i] = 0.1f
+            colors[i] = 0xFF262626.toInt()
+            continue
+        }
         val v = ((lum[i] - lo) / (hi - lo)).coerceIn(0f, 1f)
         // Dot area tracks brightness, so radius is the square root.
         sizes[i] = 0.12f + 0.88f * kotlin.math.sqrt(v)
