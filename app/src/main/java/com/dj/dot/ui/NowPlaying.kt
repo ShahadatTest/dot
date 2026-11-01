@@ -164,12 +164,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
         }
 
         Spacer(Modifier.height(10.dp))
-        val (pos, dur) = rememberProgress(200)
-        DotSlider(if (dur > 0) pos.toFloat() / dur else 0f, { engine.seekTo((it * dur).toLong()) }, bubble = { formatTime((it * dur).toLong()) })
-        Row(Modifier.fillMaxWidth()) {
-            Label(formatTime(pos), Modifier.weight(1f))
-            Label("-" + formatTime(dur - pos))
-        }
+        SeekSection()
 
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -422,4 +417,16 @@ private fun androidx.compose.foundation.layout.BoxScope.HeartBurst(count: Int) {
             .size(120.dp)
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value; this.alpha = alpha.value },
     )
+}
+
+/** The only part of Now Playing that changes several times a second, so only it recomposes. */
+@Composable
+private fun SeekSection() {
+    val engine = DotApp.instance.engine
+    val (pos, dur) = rememberProgress(200)
+    DotSlider(if (dur > 0) pos.toFloat() / dur else 0f, { engine.seekTo((it * dur).toLong()) }, bubble = { formatTime((it * dur).toLong()) })
+    Row(Modifier.fillMaxWidth()) {
+        Label(formatTime(pos), Modifier.weight(1f))
+        Label("-" + formatTime(dur - pos))
+    }
 }

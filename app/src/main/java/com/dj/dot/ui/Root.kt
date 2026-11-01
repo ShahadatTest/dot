@@ -238,7 +238,6 @@ fun rememberProgress(intervalMs: Long = 250): Pair<Long, Long> {
 @Composable
 private fun MiniPlayer(song: Song, playing: Boolean, onOpen: () -> Unit) {
     val engine = DotApp.instance.engine
-    val (pos, dur) = rememberProgress(500)
     Column(
         Modifier
             .padding(horizontal = 10.dp, vertical = 6.dp)
@@ -256,10 +255,7 @@ private fun MiniPlayer(song: Song, playing: Boolean, onOpen: () -> Unit) {
             IconBtn(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, engine::toggle, size = 28.dp)
             IconBtn(Icons.Rounded.SkipNext, engine::next)
         }
-        val fraction = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
-        Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp).height(2.dp).background(Dot.Faint)) {
-            Box(Modifier.fillMaxWidth(fraction).height(2.dp).background(Dot.Red))
-        }
+        MiniProgress()
     }
 }
 
@@ -291,5 +287,20 @@ private fun BedsideWhenCharging(app: AppState) {
             app.bedside = true
             autoOpened = true
         }
+    }
+}
+
+/** Mini player progress line; reads the playhead in the draw phase only, so nothing recomposes. */
+@Composable
+private fun MiniProgress() {
+    val engine = DotApp.instance.engine
+    var tick by remember { mutableStateOf(0L) }
+    LaunchedEffect(Unit) { while (true) { tick++; delay(500) } }
+    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp).height(2.dp)) {
+        tick
+        val d = engine.duration()
+        val f = if (d > 0) (engine.position().toFloat() / d).coerceIn(0f, 1f) else 0f
+        drawRect(Dot.Faint)
+        drawRect(Dot.Red, size = size.copy(width = size.width * f))
     }
 }
