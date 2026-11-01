@@ -33,6 +33,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -118,7 +119,7 @@ fun VisualsSheet(song: Song, playing: Boolean, onDismiss: () -> Unit) {
                     }
                 }
                 Tile("Off", !vizOn, Modifier.weight(1f).aspectRatio(0.9f), { pick { s.visualizer.set(false) } }) {
-                    DotIcon(DotIcons.Close, color = Dot.Muted, size = 18.dp)
+                    androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Rounded.Close, null, tint = Dot.Muted)
                 }
             }
 

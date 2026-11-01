@@ -55,6 +55,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -113,11 +114,11 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             .padding(horizontal = 22.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            DotIconBtn(DotIcons.ChevronDown, onClose, size = 18.dp)
+            IconBtn(Icons.Rounded.KeyboardArrowDown, onClose, size = 30.dp)
             Spacer(Modifier.width(44.dp))
             Label("Now playing", Modifier.weight(1f), color = Dot.White, align = TextAlign.Center)
-            DotIconBtn(DotIcons.Visuals, { visualsSheet = true }, tint = if (glyphMode != 0) Dot.Red else Dot.White)
-            DotIconBtn(DotIcons.Equalizer, { app.push(Screen.Equalizer) })
+            IconBtn(Icons.Rounded.AutoAwesome, { visualsSheet = true }, tint = if (glyphMode != 0) Dot.Red else Dot.White, size = 22.dp)
+            IconBtn(Icons.Rounded.GraphicEq, { app.push(Screen.Equalizer) })
         }
 
         Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
@@ -150,8 +151,8 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                 }
                 lastFav = fav
             }
-            DotIconBtn(
-                if (fav) DotIcons.Heart else DotIcons.HeartOutline,
+            IconBtn(
+                if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                 { dot.store.toggleFavourite(song.id) },
                 Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value },
                 tint = if (fav) Dot.Red else Dot.White,
@@ -168,8 +169,8 @@ fun NowPlayingScreen(onClose: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            ToggleIcon(DotIcons.Shuffle, state.shuffle, engine::toggleShuffle)
-            DotIconBtn(DotIcons.Previous, engine::previous, size = 26.dp)
+            ToggleIcon(Icons.Rounded.Shuffle, state.shuffle, engine::toggleShuffle)
+            IconBtn(Icons.Rounded.SkipPrevious, engine::previous, size = 34.dp)
             val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
             Box(
                 Modifier
@@ -180,11 +181,11 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                     .clickable(playInteraction, androidx.compose.material3.ripple(color = Dot.Black), onClick = engine::toggle),
                 contentAlignment = Alignment.Center,
             ) {
-                DotIcon(if (state.playing) DotIcons.Pause else DotIcons.Play, color = Dot.Black, size = 30.dp)
+                AnimatedIcon(if (state.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, Dot.Black, 38.dp)
             }
-            DotIconBtn(DotIcons.Next, engine::next, size = 26.dp)
+            IconBtn(Icons.Rounded.SkipNext, engine::next, size = 34.dp)
             ToggleIcon(
-                if (state.repeat == Player.REPEAT_MODE_ONE) DotIcons.RepeatOne else DotIcons.Repeat,
+                if (state.repeat == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
                 state.repeat != Player.REPEAT_MODE_OFF,
                 engine::cycleRepeat,
             )
@@ -192,9 +193,9 @@ fun NowPlayingScreen(onClose: () -> Unit) {
 
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-            Pill("Lyrics", { panel = if (panel == Panel.Lyrics) Panel.Art else Panel.Lyrics }, selected = panel == Panel.Lyrics, dot = DotIcons.Lyrics)
-            Pill("Queue", { panel = if (panel == Panel.Queue) Panel.Art else Panel.Queue }, selected = panel == Panel.Queue, dot = DotIcons.Queue)
-            Pill(sleepLabel(sleepAt), { sleepSheet = true }, selected = sleepAt != 0L, dot = DotIcons.Moon)
+            Pill("Lyrics", { panel = if (panel == Panel.Lyrics) Panel.Art else Panel.Lyrics }, selected = panel == Panel.Lyrics, icon = Icons.Rounded.Lyrics)
+            Pill("Queue", { panel = if (panel == Panel.Queue) Panel.Art else Panel.Queue }, selected = panel == Panel.Queue, icon = Icons.AutoMirrored.Rounded.QueueMusic)
+            Pill(sleepLabel(sleepAt), { sleepSheet = true }, selected = sleepAt != 0L, icon = Icons.Rounded.Bedtime)
         }
     }
 
@@ -290,8 +291,8 @@ private fun QueuePanel() {
                         Text(s.artist, color = Dot.Muted, style = MonoSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     if (!current) {
-                        DotIconBtn(DotIcons.Up, { engine.moveInQueue(i, i - 1) }, tint = Dot.Muted, size = 14.dp)
-                        DotIconBtn(DotIcons.Close, { engine.removeFromQueue(i) }, tint = Dot.Muted, size = 12.dp)
+                        IconBtn(Icons.Rounded.KeyboardArrowUp, { engine.moveInQueue(i, i - 1) }, tint = Dot.Muted, size = 20.dp)
+                        IconBtn(Icons.Rounded.Close, { engine.removeFromQueue(i) }, tint = Dot.Muted, size = 18.dp)
                     }
                 }
             }
@@ -300,9 +301,9 @@ private fun QueuePanel() {
 }
 
 @Composable
-private fun ToggleIcon(icon: DotGlyph, on: Boolean, onClick: () -> Unit) {
+private fun ToggleIcon(icon: ImageVector, on: Boolean, onClick: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        DotIconBtn(icon, onClick, tint = if (on) Dot.Red else Dot.Muted)
+        IconBtn(icon, onClick, tint = if (on) Dot.Red else Dot.Muted)
         Box(Modifier.size(4.dp).clip(CircleShape).background(if (on) Dot.Red else Dot.Black))
     }
 }
@@ -331,7 +332,7 @@ private fun SleepSheet(onDismiss: () -> Unit) {
                     DotTitle("Sleep timer", size = 24.sp)
                     Label("Wind the dial · music fades out, then stops")
                 }
-                DotIconBtn(DotIcons.Close, onDismiss, tint = Dot.Muted, size = 14.dp)
+                IconBtn(Icons.Rounded.Close, onDismiss, tint = Dot.Muted)
             }
             Spacer(Modifier.height(16.dp))
             SleepDial(minutes, { minutes = it }, Modifier.fillMaxWidth(0.82f))
@@ -341,7 +342,7 @@ private fun SleepSheet(onDismiss: () -> Unit) {
             }
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Pill("Start", { engine.setSleepTimer(minutes); onDismiss() }, accent = true, dot = DotIcons.Moon)
+                Pill("Start", { engine.setSleepTimer(minutes); onDismiss() }, accent = true, icon = Icons.Rounded.Bedtime)
                 Pill("End of song", { engine.sleepAtEndOfSong(); onDismiss() })
                 if (sleepAt != 0L) Pill("Turn off", { engine.setSleepTimer(0); onDismiss() })
             }

@@ -22,6 +22,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -131,7 +133,7 @@ fun WrappedScreen() {
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 32.dp)) {
         item {
             TopBar("Wrapped", app::pop) {
-                if (stats.totalMinutes > 0) DotIconBtn(DotIcons.Share, ::share, size = 18.dp)
+                if (stats.totalMinutes > 0) IconBtn(Icons.Rounded.Share, ::share, size = 22.dp)
             }
         }
         if (stats.totalMinutes < 1) {

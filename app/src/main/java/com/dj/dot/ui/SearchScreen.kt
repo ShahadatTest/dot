@@ -67,7 +67,7 @@ fun SearchScreen() {
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            DotIconBtn(DotIcons.Back, app::pop, size = 16.dp)
+            IconBtn(Icons.AutoMirrored.Rounded.ArrowBack, app::pop)
             Box(Modifier.weight(1f).padding(horizontal = 6.dp)) {
                 if (query.isEmpty()) Text("SEARCH", color = Dot.Muted, fontFamily = MonoFamily, fontSize = 18.sp, letterSpacing = 1.5.sp)
                 BasicTextField(
@@ -79,7 +79,7 @@ fun SearchScreen() {
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 )
             }
-            if (query.isNotEmpty()) DotIconBtn(DotIcons.Close, { query = "" }, tint = Dot.Muted, size = 13.dp)
+            if (query.isNotEmpty()) IconBtn(Icons.Rounded.Close, { query = "" }, tint = Dot.Muted)
         }
         DottedDivider(Modifier.padding(horizontal = 20.dp))
 

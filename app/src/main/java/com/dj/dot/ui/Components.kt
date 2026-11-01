@@ -3,6 +3,7 @@ package com.dj.dot.ui
 import android.content.Context
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.offset
@@ -159,14 +160,31 @@ fun IconBtn(
             .clickable(interaction, androidx.compose.material3.ripple(), onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, description, tint = tint, modifier = Modifier.size(size))
+        AnimatedIcon(icon, tint, size, description)
+    }
+}
+
+/** Icon that scales and cross-fades when it changes (play to pause, heart, repeat) and fades its tint. */
+@Composable
+fun AnimatedIcon(icon: ImageVector, tint: Color, size: Dp, description: String? = null) {
+    val color by androidx.compose.animation.animateColorAsState(tint, tween(220), label = "iconTint")
+    androidx.compose.animation.AnimatedContent(
+        targetState = icon,
+        transitionSpec = {
+            (androidx.compose.animation.scaleIn(androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 500f), initialScale = 0.4f) +
+                androidx.compose.animation.fadeIn(tween(120))) togetherWith
+                (androidx.compose.animation.scaleOut(tween(120), targetScale = 0.4f) + androidx.compose.animation.fadeOut(tween(100)))
+        },
+        label = "icon",
+    ) { target ->
+        Icon(target, description, tint = color, modifier = Modifier.size(size))
     }
 }
 
 @Composable
 fun TopBar(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        DotIconBtn(DotIcons.Back, onBack, size = 16.dp)
+        IconBtn(Icons.AutoMirrored.Rounded.ArrowBack, onBack)
         Label(title, Modifier.weight(1f).padding(start = 4.dp), color = Dot.White)
         actions()
     }
@@ -484,7 +502,7 @@ fun SongRow(
             )
         }
         if (current) Box(Modifier.size(6.dp).clip(CircleShape).background(Dot.Red))
-        DotIconBtn(DotIcons.More, onMore, tint = Dot.Muted, size = 16.dp)
+        IconBtn(Icons.Rounded.MoreVert, onMore, tint = Dot.Muted, size = 20.dp)
     }
 }
 
