@@ -12,6 +12,7 @@ import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
+import androidx.media3.common.AuxEffectInfo
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
@@ -39,7 +40,7 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -149,9 +150,10 @@ class DotEngine(
         applyVolumes()
         scope.launch { restore(library.data.first { it.ready }) }
         scope.launch {
-            combine(settings.eqEnabled.flow, settings.eqLevels.flow, settings.bassBoost.flow, settings.loudness.flow) { on, lv, bass, loud ->
-                fx.apply(on, parseLevels(lv), bass, loud)
-            }.collect {}
+            merge(
+                settings.eqEnabled.flow, settings.eqLevels.flow, settings.bassBoost.flow,
+                settings.loudness.flow, settings.virtualizer.flow, settings.reverb.flow,
+            ).collect { applyFx() }
         }
         scope.launch {
             while (isActive) {
@@ -581,6 +583,16 @@ class DotEngine(
                 if (resumeOnGain) { resumeOnGain = false; play() }
             }
         }
+    }
+
+    private fun applyFx() {
+        fx.apply(
+            settings.eqEnabled.value, parseLevels(settings.eqLevels.value), settings.bassBoost.value,
+            settings.loudness.value, settings.virtualizer.value, settings.reverb.value,
+        )
+        val send = fx.reverbSendId
+        val aux = if (send != null) AuxEffectInfo(send, 1f) else AuxEffectInfo(AuxEffectInfo.NO_AUX_EFFECT_ID, 0f)
+        players.forEach { it.setAuxEffectInfo(aux) }
     }
 
     fun parseLevels(raw: String): List<Int> {
