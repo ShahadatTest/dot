@@ -119,7 +119,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             AnimatedContent(panel, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "panel") { p ->
                 when (p) {
                     Panel.Art -> ArtPanel(song, state.playing, showViz)
-                    Panel.Lyrics -> LyricsPanel()
+                    Panel.Lyrics -> LyricsView()
                     Panel.Queue -> QueuePanel()
                 }
             }
@@ -241,50 +241,6 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
                             flash = StripStyle.entries[next].label
                         }
                     },
-            )
-        }
-    }
-}
-
-@Composable
-private fun LyricsPanel() {
-    val dot = DotApp.instance
-    val lyrics by dot.engine.lyrics.collectAsStateWithLifecycle()
-    val l = lyrics
-    if (l == null) {
-        EmptyState(
-            "No lyrics",
-            if (android.os.Environment.isExternalStorageManager()) "Put a .lrc file with the same name next to the song."
-            else "Embedded lyrics show here. For .lrc files, allow file access in Settings.",
-        )
-        return
-    }
-    val listState = rememberLazyListState()
-    val position by produceState(dot.engine.position()) {
-        while (true) { value = dot.engine.position(); delay(100) }
-    }
-    val current = l.lineAt(position)
-    LaunchedEffect(current) {
-        if (l.synced && current >= 0) listState.animateScrollToItem((current - 2).coerceAtLeast(0))
-    }
-    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 24.dp)) {
-        itemsIndexed(l.lines) { i, line ->
-            val active = !l.synced || i == current
-            Text(
-                line.text.ifBlank { "•" },
-                color = when {
-                    !l.synced -> Dot.White
-                    active -> Dot.White
-                    i < current -> Dot.Muted
-                    else -> Dot.Muted.copy(alpha = 0.55f)
-                },
-                fontSize = if (l.synced && active) 24.sp else 20.sp,
-                fontWeight = if (l.synced && active) FontWeight.Bold else FontWeight.Medium,
-                lineHeight = 30.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(enabled = l.synced) { dot.engine.seekTo(line.timeMs) }
-                    .padding(vertical = 8.dp),
             )
         }
     }
