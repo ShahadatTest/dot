@@ -144,7 +144,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
 
         Spacer(Modifier.height(10.dp))
         val (pos, dur) = rememberProgress(200)
-        DotSlider(if (dur > 0) pos.toFloat() / dur else 0f, { engine.seekTo((it * dur).toLong()) })
+        DotSlider(if (dur > 0) pos.toFloat() / dur else 0f, { engine.seekTo((it * dur).toLong()) }, bubble = { formatTime((it * dur).toLong()) })
         Row(Modifier.fillMaxWidth()) {
             Label(formatTime(pos), Modifier.weight(1f))
             Label("-" + formatTime(dur - pos))
