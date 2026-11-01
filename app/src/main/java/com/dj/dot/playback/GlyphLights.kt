@@ -44,6 +44,10 @@ class GlyphLights(
     private var listening = false
     private val last = IntArray(LEDS) { -1 }
 
+    /** What the strip is showing right now, 0..1 per LED from top to bottom, for the on-screen mirror. */
+    @Volatile var preview: FloatArray = FloatArray(LEDS)
+        private set
+
     val supported: Boolean = Build.VERSION.SDK_INT >= 34 && runCatching { Common.is25111() }.getOrDefault(false)
 
     fun start() {
@@ -93,16 +97,18 @@ class GlyphLights(
         var lastAudible = System.nanoTime() - LATENCY_NS
         while (isActive) {
             val audible = System.nanoTime() - LATENCY_NS
-            val beat = spectrum.beatBetween(lastAudible, audible)
+            val beat = if (settings.glyphBeatFlash.value) spectrum.beatBetween(lastAudible, audible) else 0f
             lastAudible = audible
             pulse = max(pulse * 0.8f, beat)
+            val gain = settings.glyphSensitivity.value / 100f
+            val brightness = settings.glyphBrightness.value / 100f
 
             val values = IntArray(LEDS)
             when (mode) {
                 GlyphMode.Meter -> {
                     // Weight the low bands: that's where the groove is.
                     val bands = spectrum.levelsAt(audible)
-                    val target = if (bands == null) 0f else (bands[0] * 0.3f + bands[1] * 0.3f + bands[2] * 0.25f + bands[3] * 0.15f)
+                    val target = if (bands == null) 0f else ((bands[0] * 0.3f + bands[1] * 0.3f + bands[2] * 0.25f + bands[3] * 0.15f) * gain).coerceIn(0f, 1f)
                     level = if (target > level) level + (target - level) * 0.6f else level - (level - target) * 0.18f
                     val height = level * LEDS
                     for (i in 0 until LEDS) {
@@ -121,6 +127,8 @@ class GlyphLights(
                 }
                 GlyphMode.Off -> Unit
             }
+            for (i in values.indices) values[i] = (values[i] * brightness).roundToInt()
+            preview = FloatArray(LEDS) { values[it] / MAX.toFloat() }
             push(values)
             delay(FRAME_MS)
         }
@@ -142,6 +150,7 @@ class GlyphLights(
         loop?.cancel()
         loop = null
         if (listening) { spectrum.release(); listening = false }
+        preview = FloatArray(LEDS)
         scope.launch {
             runCatching { manager?.turnOff() }
             last.fill(-1)
