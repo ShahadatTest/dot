@@ -220,62 +220,120 @@ private fun WaveViz(state: VizState, modifier: Modifier, rows: Int = 11) {
 
 // ---- Art visualizers (replace the cover) --------------------------------------------------
 
+/** Pre-computed halftone: colour and base radius (0..1 of a cell) per dot. */
+private class Halftone(val grid: Int, val colors: IntArray, val sizes: FloatArray)
+
 /**
- * The cover redrawn as a dot halftone: dot size follows brightness, strongly red pixels stay
- * red, each column breathes with its frequency band and the whole image swells on beats.
+ * The cover as a colour LED-matrix halftone. Rows are offset like a print screen, dot area
+ * follows brightness after auto-levels, and each dot keeps the cover's colour. Motion is kept
+ * subtle so the image stays readable: a slight swell on beats and a ripple of light that runs
+ * outward from the centre on every hit.
  */
 @Composable
-fun DotArtViz(song: Song, state: VizState, modifier: Modifier = Modifier, grid: Int = 34) {
+fun DotArtViz(song: Song, state: VizState, modifier: Modifier = Modifier, grid: Int = 60) {
     val context = LocalContext.current
-    var cells by remember(song.albumId) { mutableStateOf<Pair<FloatArray, BooleanArray>?>(null) }
+    var halftone by remember(song.albumId) { mutableStateOf<Halftone?>(null) }
     LaunchedEffect(song.albumId) {
-        val art = ArtLoader.load(context, song, "${song.albumId}_96", 96)
-        cells = withContext(Dispatchers.Default) {
-            val lum = FloatArray(grid * grid)
-            val red = BooleanArray(grid * grid)
-            if (art == null) {
-                // No cover: a soft radial dot pattern instead.
-                for (y in 0 until grid) for (x in 0 until grid) {
-                    val dx = (x - grid / 2f) / (grid / 2f)
-                    val dy = (y - grid / 2f) / (grid / 2f)
-                    lum[y * grid + x] = (1f - (dx * dx + dy * dy)).coerceIn(0f, 1f) * 0.6f
-                }
-            } else {
-                val small = Bitmap.createScaledBitmap(art.asAndroidBitmap().copy(Bitmap.Config.ARGB_8888, false), grid, grid, true)
-                val px = IntArray(grid * grid)
-                small.getPixels(px, 0, grid, 0, 0, grid, grid)
-                for (i in px.indices) {
-                    val c = px[i]
-                    val rr = (c shr 16 and 0xFF) / 255f
-                    val gg = (c shr 8 and 0xFF) / 255f
-                    val bb = (c and 0xFF) / 255f
-                    lum[i] = 0.299f * rr + 0.587f * gg + 0.114f * bb
-                    red[i] = rr > 0.45f && rr > gg * 1.8f && rr > bb * 1.8f
-                }
-            }
-            lum to red
-        }
+        val art = ArtLoader.load(context, song, "${song.albumId}_512", 512)
+        halftone = withContext(Dispatchers.Default) { buildHalftone(art?.asAndroidBitmap(), grid) }
     }
 
     Canvas(modifier) {
         state.frame
-        val (lum, red) = cells ?: return@Canvas
-        val step = min(size.width, size.height) / grid
-        val ox = (size.width - step * grid) / 2 + step / 2
-        val oy = (size.height - step * grid) / 2 + step / 2
-        val maxR = step * 0.48f
-        for (x in 0 until grid) {
-            val band = (x * state.bands / grid).coerceIn(0, state.bands - 1)
-            val breathe = 0.82f + 0.3f * state.levels[band] + 0.18f * state.pulse
-            for (y in 0 until grid) {
-                val i = y * grid + x
-                val l = lum[i]
-                val rad = (maxR * l.pow(0.8f) * breathe).coerceIn(step * 0.07f, maxR)
-                drawCircle(if (red[i]) Dot.Red else if (l < 0.08f) Dot.Faint else Dot.White, rad, Offset(ox + x * step, oy + y * step))
+        val h = halftone ?: return@Canvas
+        val n = h.grid
+        val step = min(size.width, size.height) / (n + 0.5f)
+        val rowStep = step * 0.866f // hex packing
+        val rows = (size.height / rowStep).toInt().coerceAtMost(n)
+        val ox = (size.width - step * (n - 0.5f)) / 2
+        val oy = (size.height - rowStep * (rows - 1)) / 2
+        val cx = size.width / 2
+        val cy = size.height / 2
+        val maxDist = min(size.width, size.height) * 0.72f
+        val swell = 1f + 0.07f * state.pulse
+        val now = state.frame
+        val maxR = step * 0.56f
+
+        for (y in 0 until rows) {
+            val srcY = (y * n / rows).coerceIn(0, n - 1)
+            val shift = if (y % 2 == 1) step / 2 else 0f
+            val py = oy + y * rowStep
+            for (x in 0 until n) {
+                val px = ox + x * step + shift
+                if (px > size.width - step * 0.2f) continue
+                val i = srcY * n + x
+                val base = h.sizes[i]
+                var boost = 1f
+                if (state.ripples.isNotEmpty()) {
+                    val dx = px - cx
+                    val dy = py - cy
+                    val d = kotlin.math.sqrt(dx * dx + dy * dy) / maxDist
+                    for ((start, strength) in state.ripples) {
+                        val t = (now - start).toFloat() / RIPPLE_NS
+                        val k = (d - t) / 0.08f
+                        boost += 0.45f * strength * (1f - t) * kotlin.math.exp(-k * k)
+                    }
+                }
+                val r = (base * maxR * swell * boost).coerceIn(step * 0.06f, step * 0.62f)
+                drawCircle(androidx.compose.ui.graphics.Color(h.colors[i]), r, Offset(px, py))
             }
         }
     }
 }
+
+private fun buildHalftone(source: Bitmap?, grid: Int): Halftone {
+    val colors = IntArray(grid * grid)
+    val sizes = FloatArray(grid * grid)
+    if (source == null) {
+        // No cover: a soft radial dot pattern with a red centre.
+        for (y in 0 until grid) for (x in 0 until grid) {
+            val dx = (x - grid / 2f) / (grid / 2f)
+            val dy = (y - grid / 2f) / (grid / 2f)
+            val v = (1f - kotlin.math.sqrt(dx * dx + dy * dy)).coerceIn(0f, 1f)
+            sizes[y * grid + x] = 0.15f + 0.6f * v
+            colors[y * grid + x] = if (v > 0.9f) Dot.Red.toArgbInt() else 0xFF5A5A5A.toInt()
+        }
+        return Halftone(grid, colors, sizes)
+    }
+
+    // Centre-crop to a square, then halve repeatedly so each dot averages its whole cell.
+    var bmp = source.copy(Bitmap.Config.ARGB_8888, false)
+    val side = min(bmp.width, bmp.height)
+    bmp = Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side)
+    var w = side
+    while (w / 2 >= grid * 2) {
+        w /= 2
+        bmp = Bitmap.createScaledBitmap(bmp, w, w, true)
+    }
+    bmp = Bitmap.createScaledBitmap(bmp, grid, grid, true)
+    val px = IntArray(grid * grid)
+    bmp.getPixels(px, 0, grid, 0, 0, grid, grid)
+
+    val lum = FloatArray(px.size) { i ->
+        val c = px[i]
+        (0.299f * (c shr 16 and 0xFF) + 0.587f * (c shr 8 and 0xFF) + 0.114f * (c and 0xFF)) / 255f
+    }
+    // Auto-levels on the 3rd..98th percentile so dark or washed-out covers still read.
+    val sorted = lum.sortedArray()
+    val lo = sorted[(sorted.size * 0.03f).toInt()]
+    val hi = sorted[(sorted.size * 0.98f).toInt().coerceAtMost(sorted.lastIndex)].coerceAtLeast(lo + 0.05f)
+
+    val hsv = FloatArray(3)
+    for (i in px.indices) {
+        val v = ((lum[i] - lo) / (hi - lo)).coerceIn(0f, 1f)
+        // Dot area tracks brightness, so radius is the square root.
+        sizes[i] = 0.12f + 0.88f * kotlin.math.sqrt(v)
+        android.graphics.Color.colorToHSV(px[i], hsv)
+        hsv[1] = (hsv[1] * 1.15f).coerceAtMost(1f)
+        hsv[2] = (0.35f + 0.65f * v).coerceIn(0f, 1f)
+        colors[i] = android.graphics.Color.HSVToColor(hsv)
+    }
+    return Halftone(grid, colors, sizes)
+}
+
+private fun androidx.compose.ui.graphics.Color.toArgbInt(): Int = android.graphics.Color.argb(
+    (alpha * 255).toInt(), (red * 255).toInt(), (green * 255).toInt(), (blue * 255).toInt(),
+)
 
 /**
  * A round cover in the middle, dot spokes radiating out with the spectrum (bass at the top,
