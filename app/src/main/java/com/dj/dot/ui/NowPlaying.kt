@@ -65,6 +65,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -125,76 +130,96 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             IconBtn(Icons.Rounded.GraphicEq, { app.push(Screen.Equalizer) })
         }
 
-        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-            AnimatedContent(panel, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "panel") { p ->
-                when (p) {
-                    Panel.Art -> ArtPanel(song, state.playing, showViz)
-                    Panel.Lyrics -> LyricsView()
-                    Panel.Queue -> QueuePanel()
+        // Phones in landscape get two panes: the art, lyrics or queue on the left, controls on the right.
+        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+        @Composable
+        fun PanelArea(modifier: Modifier) {
+            Box(modifier, contentAlignment = Alignment.Center) {
+                AnimatedContent(panel, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "panel") { p ->
+                    when (p) {
+                        Panel.Art -> ArtPanel(song, state.playing, showViz)
+                        Panel.Lyrics -> LyricsView()
+                        Panel.Queue -> QueuePanel()
+                    }
                 }
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                DotTitle(song.title, Modifier.basicMarquee(), size = 28.sp)
-                Text(
-                    "${song.artist}  ·  ${song.album}", color = Dot.Muted, style = MonoSmall,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+        @Composable
+        fun Controls() {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    DotTitle(song.title, Modifier.basicMarquee(), size = 28.sp)
+                    Text(
+                        "${song.artist}  ·  ${song.album}", color = Dot.Muted, style = MonoSmall,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                val fav = song.id in favs
+                // Liking pops the heart; unliking just morphs back.
+                val pop = remember { androidx.compose.animation.core.Animatable(1f) }
+                var lastFav by remember(song.id) { mutableStateOf(fav) }
+                LaunchedEffect(fav) {
+                    if (fav && !lastFav) {
+                        pop.animateTo(1.4f, androidx.compose.animation.core.tween(110))
+                        pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 300f))
+                    }
+                    lastFav = fav
+                }
+                IconBtn(
+                    if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    { dot.store.toggleFavourite(song.id) },
+                    Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+                    tint = if (fav) Dot.Red else Dot.White,
                 )
             }
-            val fav = song.id in favs
-            // Liking pops the heart; unliking just morphs back.
-            val pop = remember { androidx.compose.animation.core.Animatable(1f) }
-            var lastFav by remember(song.id) { mutableStateOf(fav) }
-            LaunchedEffect(fav) {
-                if (fav && !lastFav) {
-                    pop.animateTo(1.4f, androidx.compose.animation.core.tween(110))
-                    pop.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.4f, stiffness = 300f))
+
+            Spacer(Modifier.height(10.dp))
+            SeekSection()
+
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                ToggleIcon(Icons.Rounded.Shuffle, state.shuffle, engine::toggleShuffle)
+                IconBtn(Icons.Rounded.SkipPrevious, engine::previous, size = 34.dp)
+                val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                Box(
+                    Modifier
+                        .size(78.dp)
+                        .pressable(playInteraction, 0.9f)
+                        .clip(CircleShape)
+                        .background(Dot.White)
+                        .clickable(playInteraction, androidx.compose.material3.ripple(color = Dot.Black), onClick = engine::toggle),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    AnimatedIcon(if (state.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, Dot.Black, 38.dp)
                 }
-                lastFav = fav
+                IconBtn(Icons.Rounded.SkipNext, engine::next, size = 34.dp)
+                ToggleIcon(
+                    if (state.repeat == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                    state.repeat != Player.REPEAT_MODE_OFF,
+                    engine::cycleRepeat,
+                )
             }
-            IconBtn(
-                if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                { dot.store.toggleFavourite(song.id) },
-                Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value },
-                tint = if (fav) Dot.Red else Dot.White,
-            )
+
+            Spacer(Modifier.height(14.dp))
+            Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+                Pill("Lyrics", { panel = if (panel == Panel.Lyrics) Panel.Art else Panel.Lyrics }, selected = panel == Panel.Lyrics, icon = Icons.Rounded.Lyrics)
+                Pill("Queue", { panel = if (panel == Panel.Queue) Panel.Art else Panel.Queue }, selected = panel == Panel.Queue, icon = Icons.AutoMirrored.Rounded.QueueMusic)
+                Pill(sleepLabel(sleepAt), { sleepSheet = true }, selected = sleepAt != 0L, icon = Icons.Rounded.Bedtime)
+            }
         }
 
-        Spacer(Modifier.height(10.dp))
-        SeekSection()
-
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            ToggleIcon(Icons.Rounded.Shuffle, state.shuffle, engine::toggleShuffle)
-            IconBtn(Icons.Rounded.SkipPrevious, engine::previous, size = 34.dp)
-            val playInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-            Box(
-                Modifier
-                    .size(78.dp)
-                    .pressable(playInteraction, 0.9f)
-                    .clip(CircleShape)
-                    .background(Dot.White)
-                    .clickable(playInteraction, androidx.compose.material3.ripple(color = Dot.Black), onClick = engine::toggle),
-                contentAlignment = Alignment.Center,
-            ) {
-                AnimatedIcon(if (state.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, Dot.Black, 38.dp)
+        if (landscape) {
+            Row(Modifier.fillMaxWidth().weight(1f).padding(bottom = 8.dp)) {
+                PanelArea(Modifier.weight(1f).fillMaxHeight())
+                Spacer(Modifier.width(28.dp))
+                Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center) { Controls() }
             }
-            IconBtn(Icons.Rounded.SkipNext, engine::next, size = 34.dp)
-            ToggleIcon(
-                if (state.repeat == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                state.repeat != Player.REPEAT_MODE_OFF,
-                engine::cycleRepeat,
-            )
-        }
-
-        Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
-            Pill("Lyrics", { panel = if (panel == Panel.Lyrics) Panel.Art else Panel.Lyrics }, selected = panel == Panel.Lyrics, icon = Icons.Rounded.Lyrics)
-            Pill("Queue", { panel = if (panel == Panel.Queue) Panel.Art else Panel.Queue }, selected = panel == Panel.Queue, icon = Icons.AutoMirrored.Rounded.QueueMusic)
-            Pill(sleepLabel(sleepAt), { sleepSheet = true }, selected = sleepAt != 0L, icon = Icons.Rounded.Bedtime)
+        } else {
+            PanelArea(Modifier.fillMaxWidth().weight(1f))
+            Spacer(Modifier.height(12.dp))
+            Controls()
         }
     }
 
@@ -341,7 +366,8 @@ private fun SleepSheet(onDismiss: () -> Unit) {
         containerColor = Dot.Surface2,
     ) {
         Column(
-            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 16.dp),
+            Modifier.fillMaxWidth().verticalScroll(androidx.compose.foundation.rememberScrollState())
+                .navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -352,7 +378,7 @@ private fun SleepSheet(onDismiss: () -> Unit) {
                 IconBtn(Icons.Rounded.Close, onDismiss, tint = Dot.Muted)
             }
             Spacer(Modifier.height(8.dp))
-            SleepDial(minutes, { minutes = it }, Modifier.fillMaxWidth(0.7f))
+            SleepDial(minutes, { minutes = it }, Modifier.fillMaxWidth(0.7f).widthIn(max = 300.dp))
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(15, 30, 45, 60, 90).forEach { m -> Pill("$m", { minutes = m }, selected = minutes == m) }
