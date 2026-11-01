@@ -161,6 +161,7 @@ class DotEngine(
                 autoCrossfadeTick()
                 val d = duration()
                 progress = if (d > 0) (active.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
+                trackListening()
             }
         }
     }
@@ -399,6 +400,32 @@ class DotEngine(
         if (d <= 0) return
         sleepJob?.cancel()
         scheduleSleep(((d - active.currentPosition) / active.playbackParameters.speed).toLong())
+    }
+
+    // ---- Listening stats ----
+
+    private var listenSong = -1L
+    private var listenAcc = 0L
+    private var lastTick = SystemClock.uptimeMillis()
+
+    /** Counts real listening time, flushed every few seconds and on every change of song. */
+    private fun trackListening() {
+        val now = SystemClock.uptimeMillis()
+        val dt = (now - lastTick).coerceIn(0, 1000)
+        lastTick = now
+        val current = _state.value.current?.id
+        if (active.isPlaying && current != null) {
+            if (current != listenSong) { flushListening(); listenSong = current }
+            listenAcc += dt
+            if (listenAcc >= 5000) flushListening()
+        } else {
+            flushListening()
+        }
+    }
+
+    private fun flushListening() {
+        if (listenAcc > 0 && listenSong >= 0) store.addListen(listenSong, listenAcc)
+        listenAcc = 0
     }
 
     // ---- Crossfade ----------------------------------------------------------------------
