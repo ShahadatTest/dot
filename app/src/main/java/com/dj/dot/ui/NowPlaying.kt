@@ -59,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -339,17 +340,32 @@ private fun sleepLabel(sleepAt: Long): String {
 @Composable
 private fun SleepSheet(onDismiss: () -> Unit) {
     val engine = DotApp.instance.engine
+    val sleepAt by engine.sleepAt.collectAsStateWithLifecycle()
+    var minutes by remember { mutableIntStateOf(30) }
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Dot.Surface2) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
-            DotTitle("Sleep timer", size = 24.sp)
-            Spacer(Modifier.height(4.dp))
-            Label("Music fades out gently, then stops")
-            Spacer(Modifier.height(16.dp))
-            listOf(15, 30, 45, 60, 90).forEach { m ->
-                SheetItem("$m minutes") { engine.setSleepTimer(m); onDismiss() }
+        Column(
+            Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    DotTitle("Sleep timer", size = 24.sp)
+                    Label("Wind the dial · music fades out, then stops")
+                }
+                IconBtn(Icons.Rounded.Close, onDismiss, tint = Dot.Muted)
             }
-            SheetItem("End of this song") { engine.sleepAtEndOfSong(); onDismiss() }
-            SheetItem("Turn off", red = true) { engine.setSleepTimer(0); onDismiss() }
+            Spacer(Modifier.height(16.dp))
+            SleepDial(minutes, { minutes = it }, Modifier.fillMaxWidth(0.82f))
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(15, 30, 45, 60, 90).forEach { m -> Pill("$m", { minutes = m }, selected = minutes == m) }
+            }
+            Spacer(Modifier.height(16.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Pill("Start", { engine.setSleepTimer(minutes); onDismiss() }, accent = true, icon = Icons.Rounded.Bedtime)
+                Pill("End of song", { engine.sleepAtEndOfSong(); onDismiss() })
+                if (sleepAt != 0L) Pill("Turn off", { engine.setSleepTimer(0); onDismiss() })
+            }
         }
     }
 }
