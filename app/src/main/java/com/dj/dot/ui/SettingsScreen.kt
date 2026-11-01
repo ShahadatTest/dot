@@ -87,11 +87,12 @@ fun SettingsScreen() {
                 "Crossfade", if (crossfade == 0) "OFF" else "%.1f S".format(crossfade / 1000f),
                 "Blend the end of one song into the next",
                 crossfade / 12000f,
+                steps = 24,
             ) { s.crossfadeMs.set(((it * 24).roundToInt() * 500)) }
         }
         item { SwitchRow("Fade when skipping", "Quick blend when you tap next, previous or a song", fadeSkip) { s.fadeOnSkip.set(it) } }
         if (fadeSkip) item {
-            SliderRow("Skip fade", "%.1f S".format(skipFade / 1000f), null, skipFade / 4000f) {
+            SliderRow("Skip fade", "%.1f S".format(skipFade / 1000f), null, skipFade / 4000f, steps = 16) {
                 s.skipFadeMs.set(((it * 16).roundToInt() * 250).coerceAtLeast(250))
             }
         }
@@ -100,7 +101,7 @@ fun SettingsScreen() {
         item { Section("Sound") }
         item { NavRow("Sound effects & equalizer", if (eqOn) effect else "Hi-Fi") { app.push(Screen.Equalizer) } }
         item {
-            SliderRow("Playback speed", "%.2fX".format(speed), "Tap the value to reset", (speed - 0.5f) / 1.5f, onLabelClick = { dot.engine.setSpeed(1f) }) {
+            SliderRow("Playback speed", "%.2fX".format(speed), "Tap the value to reset", (speed - 0.5f) / 1.5f, steps = 30, onLabelClick = { dot.engine.setSpeed(1f) }) {
                 dot.engine.setSpeed(((0.5f + it * 1.5f) * 20).roundToInt() / 20f)
             }
         }
@@ -383,6 +384,7 @@ private fun SliderRow(
     subtitle: String?,
     fraction: Float,
     live: Boolean = true,
+    steps: Int = 20,
     onLabelClick: (() -> Unit)? = null,
     onChange: (Float) -> Unit,
 ) {
@@ -395,6 +397,6 @@ private fun SliderRow(
             Label(value, color = Dot.White, modifier = if (onLabelClick != null) Modifier.clickable(onClick = onLabelClick) else Modifier)
         }
         Spacer(Modifier.height(4.dp))
-        DotSlider(fraction, onChange, live = live)
+        DotSlider(fraction, onChange, live = live, steps = steps, bubble = { value })
     }
 }
