@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
@@ -104,9 +105,13 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             .background(Dot.Black)
             .pointerInput(Unit) {
                 detectVerticalDragGestures(
-                    onDragEnd = { if (pullDown > 220f) onClose(); pullDown = 0f },
+                    // Down closes the player, up opens the queue.
+                    onDragEnd = {
+                        if (pullDown > 220f) onClose() else if (pullDown < -220f) panel = Panel.Queue
+                        pullDown = 0f
+                    },
                     onDragCancel = { pullDown = 0f },
-                ) { _, dy -> pullDown = (pullDown + dy).coerceAtLeast(0f) }
+                ) { _, dy -> pullDown += dy }
             }
             .statusBarsPadding()
             .navigationBarsPadding()
@@ -114,9 +119,9 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconBtn(Icons.Rounded.KeyboardArrowDown, onClose, size = 30.dp)
-            Spacer(Modifier.width(44.dp))
+            IconBtn(Icons.Rounded.Fullscreen, { app.party = true }, size = 24.dp)
             Label("Now playing", Modifier.weight(1f), color = Dot.White, align = TextAlign.Center)
-            GlyphIcon(glyphMode != 0) { visualsSheet = true }
+            DotIconBtn(DotIcons.Visuals, { visualsSheet = true }, tint = if (glyphMode != 0) Dot.Red else Dot.White)
             IconBtn(Icons.Rounded.GraphicEq, { app.push(Screen.Equalizer) })
         }
 
@@ -213,6 +218,8 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
     val needsAnalysis = showViz || artStyle != ArtStyle.Cover
     var dragX by remember { mutableFloatStateOf(0f) }
     var flash by remember { mutableStateOf<String?>(null) }
+    var hearts by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     LaunchedEffect(flash) { if (flash != null) { delay(1100); flash = null } }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
@@ -231,11 +238,19 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
                     ) { _, dx -> dragX += dx }
                 }
                 .pointerInput(artStyleIndex) {
-                    detectTapGestures {
-                        val next = (artStyleIndex + 1) % ArtStyle.entries.size
-                        dot.settings.artStyle.set(next)
-                        flash = ArtStyle.entries[next].label
-                    }
+                    detectTapGestures(
+                        onTap = {
+                            val next = (artStyleIndex + 1) % ArtStyle.entries.size
+                            dot.settings.artStyle.set(next)
+                            flash = ArtStyle.entries[next].label
+                        },
+                        // Double-tap only ever likes, never unlikes.
+                        onDoubleTap = {
+                            if (song.id !in dot.store.favourites.value) dot.store.toggleFavourite(song.id)
+                            haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                            hearts++
+                        },
+                    )
                 },
             contentAlignment = Alignment.Center,
         ) {
@@ -244,6 +259,7 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
                 artStyle == ArtStyle.Halo && viz != null -> HaloViz(song, viz, Modifier.fillMaxSize())
                 else -> Art(song, Modifier.fillMaxSize(), px = 1080, shape = RoundedCornerShape(26.dp))
             }
+            HeartBurst(hearts)
             flash?.let {
                 Box(Modifier.align(Alignment.TopStart).padding(12.dp).clip(CircleShape).background(Dot.Black.copy(alpha = 0.7f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
                     Label(it, color = Dot.White)
@@ -361,4 +377,23 @@ fun SheetItem(text: String, icon: ImageVector? = null, red: Boolean = false, onC
         }
         Text(text, color = if (red) Dot.Red else Dot.White, fontSize = 15.sp)
     }
+}
+
+/** Big red heart that pops and fades over the art on every double-tap. */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.HeartBurst(count: Int) {
+    if (count == 0) return
+    val scale = remember(count) { androidx.compose.animation.core.Animatable(0.3f) }
+    val alpha = remember(count) { androidx.compose.animation.core.Animatable(1f) }
+    LaunchedEffect(count) {
+        scale.animateTo(1.15f, androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = 400f))
+        alpha.animateTo(0f, androidx.compose.animation.core.tween(350, delayMillis = 250))
+    }
+    Icon(
+        Icons.Rounded.Favorite, null, tint = Dot.Red,
+        modifier = Modifier
+            .align(Alignment.Center)
+            .size(120.dp)
+            .graphicsLayer { scaleX = scale.value; scaleY = scale.value; this.alpha = alpha.value },
+    )
 }
