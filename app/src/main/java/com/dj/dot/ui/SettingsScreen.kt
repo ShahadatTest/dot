@@ -62,6 +62,7 @@ fun SettingsScreen() {
     val fadePause by s.fadeOnPause.flow.collectAsStateWithLifecycle()
     val speed by s.speed.flow.collectAsStateWithLifecycle()
     val minDur by s.minDurationSec.flow.collectAsStateWithLifecycle()
+    val hideWhatsApp by s.hideWhatsApp.flow.collectAsStateWithLifecycle()
     val viz by s.visualizer.flow.collectAsStateWithLifecycle()
     val eqOn by s.eqEnabled.flow.collectAsStateWithLifecycle()
     val effect by s.soundEffect.flow.collectAsStateWithLifecycle()
@@ -122,6 +123,12 @@ fun SettingsScreen() {
                         Pill(if (sec == 0) "All" else "${sec}s", { s.minDurationSec.set(sec); dot.library.rescan() }, selected = minDur == sec)
                     }
                 }
+            }
+        }
+        item {
+            SwitchRow("Hide WhatsApp audio", "Voice notes and audio received on WhatsApp", hideWhatsApp) {
+                s.hideWhatsApp.set(it)
+                dot.library.rescan()
             }
         }
         item { NavRow("Rescan library", if (scanning) "Scanning…" else "${lib.songs.size} songs") { dot.library.rescan() } }
