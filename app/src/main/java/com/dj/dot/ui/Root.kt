@@ -49,6 +49,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -81,6 +82,8 @@ class AppState {
     val stack = mutableStateListOf<Screen>(Screen.Home)
     var nowPlaying by mutableStateOf(false)
     var party by mutableStateOf(false)
+    var bedside by mutableStateOf(false)
+    var lastTouch by mutableStateOf(0L)
     var menu by mutableStateOf<SongMenu?>(null)
     var addToPlaylist by mutableStateOf<List<Song>?>(null)
 
@@ -150,7 +153,20 @@ private fun MainUi() {
     val holder = rememberSaveableStateHolder()
 
     CompositionLocalProvider(LocalAppState provides app) {
-        Box(Modifier.fillMaxSize().background(Dot.Black)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Dot.Black)
+                .pointerInput(Unit) {
+                    // Watches touches without consuming them, so bedside mode knows when the phone is idle.
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            app.lastTouch = android.os.SystemClock.uptimeMillis()
+                        }
+                    }
+                },
+        ) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f)) {
                     AnimatedContent(
@@ -176,12 +192,14 @@ private fun MainUi() {
             }
 
             if (app.party && state.current != null) PartyMode(onExit = { app.party = false })
+            if (app.bedside) BedsideMode(onExit = { app.bedside = false })
 
             app.menu?.let { SongMenuSheet(it, onDismiss = { app.menu = null }) }
             app.addToPlaylist?.let { AddToPlaylistSheet(it, onDismiss = { app.addToPlaylist = null }) }
         }
 
         ShakeToShuffle()
+        BedsideWhenCharging(app)
 
         BackHandler(enabled = app.nowPlaying || app.stack.size > 1) {
             if (app.nowPlaying) app.nowPlaying = false else app.pop()
@@ -241,6 +259,37 @@ private fun MiniPlayer(song: Song, playing: Boolean, onOpen: () -> Unit) {
         val fraction = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
         Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp).height(2.dp).background(Dot.Faint)) {
             Box(Modifier.fillMaxWidth(fraction).height(2.dp).background(Dot.Red))
+        }
+    }
+}
+
+/** Opens bedside mode after a minute untouched while charging, and closes it when unplugged. */
+@Composable
+private fun BedsideWhenCharging(app: AppState) {
+    val context = LocalContext.current
+    val enabled by DotApp.instance.settings.bedsideWhenCharging.flow.collectAsStateWithLifecycle()
+    var charging by remember { mutableStateOf(false) }
+    var autoOpened by remember { mutableStateOf(false) }
+
+    androidx.lifecycle.compose.LifecycleStartEffect(Unit) {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: Context, i: android.content.Intent) {
+                charging = i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+            }
+        }
+        val sticky = ContextCompat.registerReceiver(
+            context, receiver, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        sticky?.let { charging = it.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0 }
+        onStopOrDispose { context.unregisterReceiver(receiver) }
+    }
+
+    LaunchedEffect(charging, enabled, app.lastTouch, app.bedside, app.party) {
+        if (!charging && autoOpened) { app.bedside = false; autoOpened = false }
+        if (charging && enabled && !app.bedside && !app.party) {
+            delay(60_000)
+            app.bedside = true
+            autoOpened = true
         }
     }
 }

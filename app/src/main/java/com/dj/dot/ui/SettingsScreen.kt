@@ -71,6 +71,7 @@ fun SettingsScreen() {
     val stripStyle by s.stripStyle.flow.collectAsStateWithLifecycle()
     val glyphMode by s.glyphMode.flow.collectAsStateWithLifecycle()
     val shake by s.shakeForRandom.flow.collectAsStateWithLifecycle()
+    val bedside by s.bedsideWhenCharging.flow.collectAsStateWithLifecycle()
     val scanning by dot.library.scanning.collectAsStateWithLifecycle()
     val lib by dot.library.data.collectAsStateWithLifecycle()
 
@@ -114,6 +115,8 @@ fun SettingsScreen() {
         item { SwitchRow("Glyph visualizer", "Dot-matrix spectrum and beat pulse on Now Playing", viz) { s.visualizer.set(it) } }
         if (viz) item { PickerRow("Visualizer style", "Or tap the visualizer to switch", StripStyle.entries.map { it.label }, stripStyle) { s.stripStyle.set(it) } }
         item { PickerRow("Cover style", "Or tap the album art to switch", ArtStyle.entries.map { it.label }, artStyle) { s.artStyle.set(it) } }
+        item { SwitchRow("Bedside clock when charging", "After a minute untouched on the charger", bedside) { s.bedsideWhenCharging.set(it) } }
+        item { NavRow("Open bedside clock", "Big dot clock with what's playing") { app.bedside = true } }
         if (dot.glyph.supported) item {
             PickerRow("Glyph lights", "The light strip on the back reacts to your music", GlyphMode.entries.map { it.label }, glyphMode) { s.glyphMode.set(it) }
         }

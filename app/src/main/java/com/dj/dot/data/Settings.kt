@@ -55,6 +55,7 @@ class Settings(context: Context) {
     val artStyle = int("art_style", 0)
     val glyphMode = int("glyph_mode", 1)
     val shakeForRandom = bool("shake_random", true)
+    val bedsideWhenCharging = bool("bedside_charging", true)
     val glyphBrightness = int("glyph_brightness", 100)
     val glyphSensitivity = int("glyph_sensitivity", 100)
     val glyphBeatFlash = bool("glyph_beat_flash", true)
