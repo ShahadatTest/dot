@@ -48,6 +48,7 @@ class Settings(context: Context) {
 
     // Library & UI
     val minDurationSec = int("min_duration", 30)
+    val hideWhatsApp = bool("hide_whatsapp", true)
     val songSort = int("song_sort", 0)
     val visualizer = bool("visualizer", true)
     val stripStyle = int("strip_style", 0)

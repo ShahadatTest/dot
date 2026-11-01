@@ -68,13 +68,15 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
             val iYear = c.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
             val iData = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
             val iAdded = c.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+            val hideWhatsApp = settings.hideWhatsApp.value
             while (c.moveToNext()) {
                 val id = c.getLong(iId)
                 val path = c.getString(iData).orEmpty()
                 val fileName = path.substringAfterLast('/').substringBeforeLast('.')
+                if (hideWhatsApp && isWhatsApp(path, fileName)) continue
                 out += Song(
                     id = id,
-                    title = c.getString(iTitle)?.takeIf { it.isNotBlank() } ?: fileName,
+                    title = TagCleaner.clean(c.getString(iTitle).orEmpty()).ifEmpty { TagCleaner.clean(fileName) }.ifEmpty { fileName },
                     artist = c.getString(iArtist).clean("Unknown artist"),
                     album = c.getString(iAlbum).clean("Unknown album"),
                     albumId = c.getLong(iAlbumId),
@@ -92,5 +94,11 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
     }
 
     private fun String?.clean(fallback: String) =
-        if (isNullOrBlank() || this == "<unknown>") fallback else this
+        if (isNullOrBlank() || this == "<unknown>") fallback else TagCleaner.clean(this).ifEmpty { fallback }
+
+    private val whatsAppName = Regex("""^(AUD|PTT)-\d{8}-WA\d+.*""", RegexOption.IGNORE_CASE)
+
+    /** WhatsApp voice notes and shared audio, wherever they were saved. */
+    private fun isWhatsApp(path: String, fileName: String) =
+        whatsAppName.matches(fileName) || path.contains("/WhatsApp", ignoreCase = true)
 }
