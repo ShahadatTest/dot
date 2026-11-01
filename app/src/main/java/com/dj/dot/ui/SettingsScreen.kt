@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dj.dot.DotApp
 import com.dj.dot.playback.AudioFx
+import com.dj.dot.playback.GlyphMode
 import kotlin.math.roundToInt
 
 @Composable
@@ -68,6 +69,7 @@ fun SettingsScreen() {
     val effect by s.soundEffect.flow.collectAsStateWithLifecycle()
     val artStyle by s.artStyle.flow.collectAsStateWithLifecycle()
     val stripStyle by s.stripStyle.flow.collectAsStateWithLifecycle()
+    val glyphMode by s.glyphMode.flow.collectAsStateWithLifecycle()
     val scanning by dot.library.scanning.collectAsStateWithLifecycle()
     val lib by dot.library.data.collectAsStateWithLifecycle()
 
@@ -111,6 +113,9 @@ fun SettingsScreen() {
         item { SwitchRow("Glyph visualizer", "Dot-matrix spectrum and beat pulse on Now Playing", viz) { s.visualizer.set(it) } }
         if (viz) item { PickerRow("Visualizer style", "Or tap the visualizer to switch", StripStyle.entries.map { it.label }, stripStyle) { s.stripStyle.set(it) } }
         item { PickerRow("Cover style", "Or tap the album art to switch", ArtStyle.entries.map { it.label }, artStyle) { s.artStyle.set(it) } }
+        if (dot.glyph.supported) item {
+            PickerRow("Glyph lights", "The light strip on the back reacts to your music", GlyphMode.entries.map { it.label }, glyphMode) { s.glyphMode.set(it) }
+        }
 
         item { Section("Library") }
         item {
