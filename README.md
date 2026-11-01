@@ -4,6 +4,13 @@ An offline music player for Android, designed around the Nothing OS look: pure b
 
 Dot plays the music that lives on your phone. No accounts, no streaming, no ads, no network calls.
 
+| | Size |
+| --- | --- |
+| Download | **1.8 MB** |
+| Installed | **3.6 MB** |
+
+For comparison, most streaming music apps install at well over 100 MB.
+
 ## Features
 
 **Playback**
@@ -256,7 +263,9 @@ Dot is built to stay light on battery and memory:
 - Search is debounced and matched off the main thread.
 - Album art is cached in three size buckets; vinyl grooves are a one-byte alpha mask.
 - Tempo is learned once per song from its first 25 seconds, then never measured again.
-- Release builds are shrunk and optimised with R8 (about 4 MB).
+- Release builds are shrunk and optimised with R8: a 1.8 MB download and 3.6 MB installed.
+- Only English resources, arm64 native code and the audio extractors a music library needs are packaged.
+- Fonts are subset to Latin, and the Doto variable font is frozen to the one style Dot uses.
 
 ## Tech stack
 
