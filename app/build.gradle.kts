@@ -35,6 +35,20 @@ android {
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
+// Nothing's Glyph SDK isn't on Maven, so it is fetched from the official repo on first build.
+val glyphSdk = layout.projectDirectory.file("libs/glyph-matrix-sdk-2.0.aar")
+val fetchGlyphSdk by tasks.registering {
+    val target = glyphSdk.asFile
+    outputs.file(target)
+    onlyIf { !target.exists() }
+    doLast {
+        target.parentFile.mkdirs()
+        uri("https://github.com/Nothing-Developer-Programme/Glyph-Developer-Kit/raw/main/sdk/glyph-matrix-sdk-2.0.aar")
+            .toURL().openStream().use { input -> target.outputStream().use { input.copyTo(it) } }
+    }
+}
+tasks.named("preBuild") { dependsOn(fetchGlyphSdk) }
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2025.06.00")
     implementation(composeBom)
@@ -48,4 +62,5 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.8.0")
     implementation("androidx.media3:media3-session:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation(files(glyphSdk))
 }
