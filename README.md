@@ -89,46 +89,101 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
 
 ## Architecture
 
+Dot is a single-module app in four layers. Data flows up as `StateFlow`; commands flow down as plain method calls on a few app-wide singletons created in `DotApp`.
+
 ```mermaid
 flowchart TB
     subgraph UI["UI · Jetpack Compose"]
-        Home["Home tabs"]
-        NP["Now Playing<br/>cover styles · visualizer · lyrics"]
-        Sheets["Visuals · Sleep dial · Song menu"]
-        Screens["Details · Search · Settings · Sound · Wrapped"]
+        direction LR
+        Screens["Home · Details · Search<br/>Settings · Sound · Wrapped"]
+        NP["Now Playing<br/>cover styles · visualizer<br/>lyrics · queue"]
+        Overlays["Party mode · Bedside clock<br/>Visuals · Sleep dial · Song menu"]
+        Gestures["Shake · double-tap · swipes"]
     end
 
-    subgraph Core["App singletons"]
-        Library["Library<br/>MediaStore index + cache"]
-        Store["PlaylistStore<br/>playlists · favourites · stats"]
-        Prefs["Settings"]
-        Engine["DotEngine"]
+    subgraph Core["State · DotApp singletons"]
+        direction LR
+        Library["Library<br/>MediaStore + cached index"]
+        Store["PlaylistStore<br/>playlists · favourites<br/>stats · tempos"]
+        Prefs["Settings<br/>typed preferences"]
     end
 
-    subgraph Audio["Playback"]
+    subgraph Playback["Playback"]
+        Engine["DotEngine<br/>queue · crossfade · focus · sleep"]
+        Tracker["ListeningTracker<br/>listening time · tempo learning"]
         P1["ExoPlayer A"]
         P2["ExoPlayer B"]
-        Fx["AudioFx<br/>EQ · bass · surround · loudness · reverb"]
+        Fx["AudioFx<br/>EQ · bass · surround<br/>loudness · reverb"]
         Spec["Spectrum<br/>FFT · beats · BPM · waveform"]
+        Lyrics["Lyrics<br/>LRC · ID3 · Vorbis"]
     end
 
-    Glyph["GlyphLights<br/>Nothing Glyph SDK"]
-    Service["DotService<br/>MediaSessionService"]
-    System["Notification · Lock screen · Headset"]
+    subgraph System["Android and Nothing OS"]
+        direction LR
+        Service["DotService<br/>MediaSession"]
+        Glyph["GlyphLights<br/>Glyph SDK"]
+        Media["Notification · lock screen<br/>headset · Bluetooth"]
+    end
 
-    UI -->|StateFlow| Core
-    Engine --> P1 & P2
-    P1 & P2 -->|shared audio session| Fx
-    P1 & P2 -->|PCM tap| Spec
-    Spec -->|levels + beats| NP
-    Spec -->|levels + beats| Glyph
-    Service -->|MediaSession| Engine
-    System <--> Service
+    UI -- "StateFlow" --> Core
+    UI -- "commands" --> Engine
     Library --> Engine
-    Engine -->|listening time| Store
+    Prefs --> Engine & Glyph
+    Engine --> P1 & P2
+    Engine --> Tracker --> Store
+    Engine --> Lyrics
+    P1 & P2 -- "shared audio session" --> Fx
+    P1 & P2 -- "PCM tap" --> Spec
+    Spec -- "levels · beats" --> NP & Overlays & Glyph
+    Spec -- "BPM" --> Tracker
+    Service <--> Engine
+    Media <--> Service
 ```
 
-The UI never talks to ExoPlayer directly. Everything goes through `DotEngine`, which exposes its state as `StateFlow` and owns both players. `DotService` wraps the engine in a Media3 `MediaSession`, so the system's media controls drive the same code paths as the app's buttons. The spectrum analyser is shared: the on-screen visuals and the Glyph strip each hold a reference, and it does no work when nobody is listening.
+- **The UI never touches ExoPlayer.** Screens read `StateFlow`s and call methods on `DotEngine`, which owns both players.
+- **One code path for every control.** `DotService` wraps the engine in a Media3 `MediaSession`, so the notification, lock screen and headset buttons drive exactly the same methods as the app's buttons.
+- **The analyser is shared and reference-counted.** Visuals, the Glyph strip and tempo learning each acquire `Spectrum` while they need it. It does no work when nobody holds it, and skips the waveform when only the strip and tempo learning listen.
+- **Overlays are plain composables.** Party mode, the bedside clock and the sheets sit on top of the navigation stack in `Root`, so they keep their own state and close with back.
+
+### Data and persistence
+
+Dot has no database. Everything persists in three small files and Android's own media index:
+
+```mermaid
+flowchart LR
+    MS[("MediaStore<br/>Android's audio index")]
+    Cache[("library_cache.json<br/>last scan + change key")]
+    Lib[("library.json<br/>playlists · favourites · play counts<br/>listening time · tempos")]
+    Prefs[("SharedPreferences<br/>settings · saved queue · lyric offsets")]
+    LRC[(".lrc files<br/>next to songs")]
+
+    MS -- "query on change" --> Library
+    Cache -- "instant open" --> Library
+    Library -- "after a rescan" --> Cache
+    Library --> Engine
+    Store <--> Lib
+    Settings <--> Prefs
+    LRC --> Lyrics
+    Engine -- "save on pause / exit" --> Prefs
+```
+
+- **Opening the app:** the library loads from `library_cache.json` straight away, then Dot compares MediaStore's change counter and filters with the cached key and only re-queries if something changed.
+- **While playing:** listening time is written at most once a minute; a song's tempo is written once, after its first play.
+- **Writes are debounced and atomic:** `library.json` is written to a temporary file and renamed, so a crash mid-write can't corrupt it.
+
+### Screens and overlays
+
+```mermaid
+flowchart LR
+    Home --> Album & Artist & Folder & Playlist
+    Home --> Search & Settings & Wrapped
+    Settings --> Sound
+    Mini["Mini player"] --> NP["Now Playing"]
+    NP --> Visuals & Sleep["Sleep dial"] & Sound & Party["Party mode"]
+    NP -. "swipe up" .-> Queue
+    NP -. "tap" .-> Lyrics
+    Charging["Charging + idle"] -.-> Bedside["Bedside clock"]
+```
 
 ## How crossfade works
 
@@ -230,6 +285,7 @@ app/src/main/java/com/dj/dot
 │   └── Settings.kt        typed preferences as StateFlows
 ├── playback/
 │   ├── DotEngine.kt       dual-player engine, crossfade, focus, queue
+│   ├── ListeningTracker.kt listening time and tempo learning
 │   ├── DotService.kt      media session service and notification art
 │   ├── AudioFx.kt         equalizer, sound modes, surround, reverb
 │   ├── Spectrum.kt        FFT, bands, beats, BPM, waveform
@@ -238,6 +294,7 @@ app/src/main/java/com/dj/dot
 └── ui/
     ├── Theme.kt           colours and type
     ├── Components.kt      pills, sliders, art, fast scroller, press animations
+    ├── DotIcons.kt        the dot-matrix Visuals icon
     ├── Root.kt            navigation, permissions, mini player
     ├── Home.kt            library tabs
     ├── Details.kt         album, artist, folder, playlist
