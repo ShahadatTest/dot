@@ -130,6 +130,15 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
         return if (best >= 0 && nanoTime - bestT < 400_000_000L) best else null
     }
 
+    /** Starts a fresh tempo estimate, used when a new song begins. */
+    @Synchronized
+    fun resetTempo() {
+        beatCount = 0
+        beatHead = 0
+        lastBeatNs = 0L
+        bpm = 0
+    }
+
     /** Strongest beat (0..1) analysed in (fromNs, toNs], 0 if none. */
     @Synchronized
     fun beatBetween(fromNs: Long, toNs: Long): Float {

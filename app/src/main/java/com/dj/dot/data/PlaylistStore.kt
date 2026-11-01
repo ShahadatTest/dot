@@ -31,6 +31,9 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
     val dailyMs: StateFlow<Map<String, Long>> = _dailyMs
     private val _hourMs = MutableStateFlow(List(24) { 0L })
     val hourMs: StateFlow<List<Long>> = _hourMs
+    /** Tempo learned the first time each song plays, for the mood mixes. */
+    private val _bpm = MutableStateFlow<Map<Long, Int>>(emptyMap())
+    val bpm: StateFlow<Map<Long, Int>> = _bpm
     var trackingSince: Long = System.currentTimeMillis()
         private set
 
@@ -55,6 +58,8 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
             _dailyMs.value = daily.keys().asSequence().associate { it to daily.getLong(it) }
             root.optJSONArray("hours")?.let { h -> _hourMs.value = List(24) { h.optLong(it) } }
             trackingSince = root.optLong("since", trackingSince)
+            val tempo = root.optJSONObject("bpm") ?: JSONObject()
+            _bpm.value = tempo.keys().asSequence().associate { it.toLong() to tempo.getInt(it) }
         }
     }
 
@@ -84,6 +89,11 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
     fun countPlay(songId: Long) {
         val c = _playCounts.value
         _playCounts.value = c + (songId to (c[songId] ?: 0) + 1)
+        save()
+    }
+
+    fun setBpm(songId: Long, bpm: Int) {
+        _bpm.value = _bpm.value + (songId to bpm)
         save()
     }
 
@@ -119,6 +129,7 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
                 .put("daily", JSONObject().apply { _dailyMs.value.forEach { (k, v) -> put(k, v) } })
                 .put("hours", JSONArray(_hourMs.value))
                 .put("since", trackingSince)
+                .put("bpm", JSONObject().apply { _bpm.value.forEach { (k, v) -> put(k.toString(), v) } })
                 .toString()
             launch(Dispatchers.IO) {
                 val tmp = File(file.parentFile, "library.json.tmp")
