@@ -93,6 +93,8 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     val song = state.current ?: return
     var panel by remember { mutableStateOf(Panel.Art) }
     var sleepSheet by remember { mutableStateOf(false) }
+    var glyphSheet by remember { mutableStateOf(false) }
+    val glyphMode by dot.settings.glyphMode.flow.collectAsStateWithLifecycle()
     var pullDown by remember { mutableFloatStateOf(0f) }
 
     Column(
@@ -111,7 +113,9 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     ) {
         Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconBtn(Icons.Rounded.KeyboardArrowDown, onClose, size = 30.dp)
+            if (dot.glyph.supported) Spacer(Modifier.width(44.dp))
             Label("Now playing", Modifier.weight(1f), color = Dot.White, align = TextAlign.Center)
+            if (dot.glyph.supported) GlyphIcon(glyphMode != 0) { glyphSheet = true }
             IconBtn(Icons.Rounded.GraphicEq, { app.push(Screen.Equalizer) })
         }
 
@@ -177,6 +181,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
     }
 
     if (sleepSheet) SleepSheet(onDismiss = { sleepSheet = false })
+    if (glyphSheet) GlyphPanel(onDismiss = { glyphSheet = false })
 }
 
 @Composable
