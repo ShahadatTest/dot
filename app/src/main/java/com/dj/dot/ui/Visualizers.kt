@@ -138,9 +138,11 @@ private fun BeatReadout(state: VizState) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(if (state.pulse > 0.25f) Dot.Red else Dot.Faint))
+        // The pulse changes every frame, so it's read while drawing, not while composing.
+        Canvas(Modifier.size(8.dp)) { drawCircle(if (state.pulse > 0.25f) Dot.Red else Dot.Faint) }
         Spacer(Modifier.width(8.dp))
-        Label(if (state.bpm > 0) "${state.bpm} BPM" else "— BPM", color = if (state.bpm > 0) Dot.White else Dot.Muted)
+        val bpm = state.bpm
+        Label(if (bpm > 0) "$bpm BPM" else "— BPM", color = if (bpm > 0) Dot.White else Dot.Muted)
     }
 }
 

@@ -116,7 +116,7 @@ fun PartyMode(onExit: () -> Unit) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Label(song.artist, color = Dot.White)
                         Spacer(Modifier.width(14.dp))
-                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (viz.pulse > 0.25f) Dot.Red else Dot.Faint))
+                        Canvas(Modifier.size(7.dp)) { drawCircle(if (viz.pulse > 0.25f) Dot.Red else Dot.Faint) }
                         Spacer(Modifier.width(6.dp))
                         Label(if (viz.bpm > 0) "${viz.bpm} BPM" else "— BPM")
                     }
