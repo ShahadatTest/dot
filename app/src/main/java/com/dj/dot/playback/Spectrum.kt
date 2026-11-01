@@ -59,6 +59,8 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
     private val fluxHist = FloatArray(43) // ~1 s of frames
     private var fluxHead = 0
     private var fluxCount = 0
+    private var fluxSum = 0f
+    private var fluxSumSq = 0f
     private var prevFlux = 0f
     private var lastBeatNs = 0L
     private val beatTimes = LongArray(16)
@@ -90,6 +92,8 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
         filled = 0
         prevLogMag.fill(0f)
         fluxCount = 0
+        fluxSum = 0f
+        fluxSumSq = 0f
         beatCount = 0
         bpm = 0
     }
@@ -120,14 +124,15 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
     @Synchronized
     fun waveAt(nanoTime: Long): FloatArray? = frameAt(nanoTime)?.let { histWave[it] }
 
+    /** Newest frame at or before [nanoTime]; walks back from the head, usually a few steps. */
     private fun frameAt(nanoTime: Long): Int? {
-        var best = -1
-        var bestT = Long.MIN_VALUE
-        for (i in 0 until histSize) {
+        for (k in 1..histSize) {
+            val i = (head - k + histSize) % histSize
+            if (histV[i] == null) return null
             val t = histT[i]
-            if (histV[i] != null && t in (bestT + 1)..nanoTime) { bestT = t; best = i }
+            if (t <= nanoTime) return if (nanoTime - t < 400_000_000L) i else null
         }
-        return if (best >= 0 && nanoTime - bestT < 400_000_000L) best else null
+        return null
     }
 
     /** Starts a fresh tempo estimate, used when a new song begins. */
@@ -139,11 +144,16 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
         bpm = 0
     }
 
-    /** Strongest beat (0..1) analysed in (fromNs, toNs], 0 if none. */
+    /** Strongest beat (0..1) analysed in (fromNs, toNs], 0 if none. Walks back only as far as [fromNs]. */
     @Synchronized
     fun beatBetween(fromNs: Long, toNs: Long): Float {
         var strength = 0f
-        for (i in 0 until histSize) if (histT[i] in (fromNs + 1)..toNs) strength = max(strength, histBeat[i])
+        for (k in 1..histSize) {
+            val i = (head - k + histSize) % histSize
+            val t = histT[i]
+            if (histV[i] == null || t <= fromNs) break
+            if (t <= toNs) strength = max(strength, histBeat[i])
+        }
         return strength
     }
 
@@ -187,12 +197,9 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
             prevLogMag[i] = lm
         }
 
-        var mean = 0f
-        for (i in 0 until fluxCount) mean += fluxHist[i]
-        mean = if (fluxCount > 0) mean / fluxCount else 0f
-        var variance = 0f
-        for (i in 0 until fluxCount) variance += (fluxHist[i] - mean) * (fluxHist[i] - mean)
-        val std = if (fluxCount > 1) sqrt(variance / fluxCount) else 0f
+        // Running sums keep the mean and spread O(1) per frame.
+        val mean = if (fluxCount > 0) fluxSum / fluxCount else 0f
+        val std = if (fluxCount > 1) sqrt((fluxSumSq / fluxCount - mean * mean).coerceAtLeast(0f)) else 0f
 
         var beat = 0f
         val threshold = mean + 1.5f * std + 0.05f * mean
@@ -201,9 +208,17 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
             registerBeat(now)
         }
         prevFlux = flux
+        if (fluxCount == fluxHist.size) {
+            val old = fluxHist[fluxHead]
+            fluxSum -= old
+            fluxSumSq -= old * old
+        } else {
+            fluxCount++
+        }
         fluxHist[fluxHead] = flux
+        fluxSum += flux
+        fluxSumSq += flux * flux
         fluxHead = (fluxHead + 1) % fluxHist.size
-        if (fluxCount < fluxHist.size) fluxCount++
 
         // Waveform: average each 1/64th of the frame, normalised with a slow auto-gain.
         val step = n / wavePoints
