@@ -1,6 +1,25 @@
 package com.dj.dot.ui
 
 import android.content.Context
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import android.util.LruCache
 import android.util.Size
 import androidx.compose.foundation.Canvas
@@ -153,46 +172,178 @@ fun DottedDivider(modifier: Modifier = Modifier) {
     }
 }
 
-/** Horizontal dot-matrix slider. With [live] it reports while dragging, otherwise on release. */
+/**
+ * Horizontal dot-matrix slider. It swells while touched and, given [bubble], floats a value
+ * label above the finger. With [steps] it snaps and ticks; with [live] it reports while
+ * dragging, otherwise on release.
+ */
 @Composable
 fun DotSlider(
     value: Float,
     onChange: (Float) -> Unit,
     modifier: Modifier = Modifier,
     live: Boolean = false,
+    steps: Int = 0,
+    bubble: ((Float) -> String)? = null,
 ) {
-    var drag by remember { mutableStateOf<Float?>(null) }
+    val haptic = LocalHapticFeedback.current
     val cb by rememberUpdatedState(onChange)
+    var drag by remember { mutableStateOf<Float?>(null) }
+    var pressed by remember { mutableStateOf(false) }
+    var width by remember { mutableIntStateOf(0) }
+    val grow by animateFloatAsState(if (pressed || drag != null) 1f else 0f, tween(160), label = "grow")
+
+    fun snap(v: Float) = if (steps > 0) (v * steps).roundToInt() / steps.toFloat() else v
+    fun update(x: Float, report: Boolean) {
+        val v = snap((x / width.coerceAtLeast(1)).coerceIn(0f, 1f))
+        val before = drag
+        drag = v
+        if (steps > 0 && before != null && before != v) haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        if (report) cb(v)
+    }
+
     val shown = (drag ?: value).coerceIn(0f, 1f)
-    Canvas(
-        modifier
-            .fillMaxWidth()
-            .height(28.dp)
-            .pointerInput(Unit) { detectTapGestures { cb((it.x / size.width).coerceIn(0f, 1f)) } }
-            .pointerInput(live) {
-                detectHorizontalDragGestures(
-                    onDragStart = { drag = (it.x / size.width).coerceIn(0f, 1f) },
-                    onDragEnd = { drag?.let(cb); drag = null },
-                    onDragCancel = { drag = null },
-                ) { change, _ ->
-                    val v = (change.position.x / size.width).coerceIn(0f, 1f)
-                    drag = v
-                    if (live) cb(v)
+    Box(modifier.fillMaxWidth().height(32.dp).onSizeChanged { width = it.width }) {
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTapGestures(
+                        onPress = {
+                            pressed = true
+                            tryAwaitRelease()
+                            pressed = false
+                        },
+                        onTap = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            cb(snap((it.x / size.width).coerceIn(0f, 1f)))
+                        },
+                    )
                 }
-            },
-    ) {
-        val thumb = 5.dp.toPx()
-        val r = 1.6.dp.toPx()
-        val step = 6.dp.toPx()
-        val cy = size.height / 2
-        val usable = size.width - thumb * 2
-        val count = (usable / step).toInt()
-        val litX = thumb + shown * usable
-        for (i in 0..count) {
-            val x = thumb + i * step
-            drawCircle(if (x <= litX) Dot.White else Dot.Faint, r, Offset(x, cy))
+                .pointerInput(live, steps) {
+                    detectHorizontalDragGestures(
+                        onDragStart = {
+                            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            update(it.x, live)
+                        },
+                        onDragEnd = { drag?.let(cb); drag = null },
+                        onDragCancel = { drag = null },
+                    ) { change, _ ->
+                        change.consume()
+                        update(change.position.x, live)
+                    }
+                },
+        ) {
+            val thumb = (5f + 4f * grow).dp.toPx()
+            val r = (1.6f + 0.9f * grow).dp.toPx()
+            val step = 6.dp.toPx()
+            val cy = size.height / 2
+            val usable = size.width - 9.dp.toPx() * 2
+            val start = 9.dp.toPx()
+            val count = (usable / step).toInt()
+            val litX = start + shown * usable
+            for (i in 0..count) {
+                val x = start + i * step
+                drawCircle(if (x <= litX) Dot.White else Dot.Faint, r, Offset(x, cy))
+            }
+            drawCircle(Dot.Red, thumb, Offset(litX, cy))
+            if (grow > 0f) drawCircle(Dot.Red.copy(alpha = 0.18f * grow), thumb * 2.2f, Offset(litX, cy))
         }
-        drawCircle(Dot.Red, thumb, Offset(litX, cy))
+        if (bubble != null && drag != null && width > 0) {
+            val density = LocalDensity.current
+            Box(
+                Modifier.layout { measurable, _ ->
+                    val p = measurable.measure(Constraints())
+                    val start = with(density) { 9.dp.toPx() }
+                    val x = start + shown * (width - start * 2)
+                    layout(0, 0) {
+                        p.place(
+                            (x - p.width / 2).roundToInt().coerceIn(0, (width - p.width).coerceAtLeast(0)),
+                            -p.height - with(density) { 6.dp.roundToPx() },
+                        )
+                    }
+                },
+            ) {
+                Box(Modifier.clip(CircleShape).background(Dot.White).padding(horizontal = 12.dp, vertical = 5.dp)) {
+                    Text(bubble(shown), color = Dot.Black, style = MonoLabel, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Drag-to-fly scroller for long lists. Appears while the list moves, then fades; while dragged
+ * it shows a big dot-matrix bubble with the section under the finger.
+ */
+@Composable
+fun FastScroller(
+    listState: LazyListState,
+    count: Int,
+    itemOffset: Int,
+    labelFor: (Int) -> String,
+    modifier: Modifier = Modifier,
+) {
+    if (count < 30) return
+    val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    var dragging by remember { mutableStateOf(false) }
+    var dragFraction by remember { mutableFloatStateOf(0f) }
+    var shown by remember { mutableStateOf(false) }
+    var label by remember { mutableStateOf("") }
+    val scrolling = listState.isScrollInProgress
+    LaunchedEffect(scrolling, dragging) {
+        if (scrolling || dragging) shown = true else { delay(1400); shown = false }
+    }
+    val alpha by animateFloatAsState(if (shown) 1f else 0f, tween(if (shown) 120 else 500), label = "scroller")
+    val fraction = if (dragging) dragFraction
+    else ((listState.firstVisibleItemIndex - itemOffset).coerceAtLeast(0).toFloat() / (count - 1)).coerceIn(0f, 1f)
+
+    BoxWithConstraints(modifier.fillMaxHeight().width(64.dp)) {
+        val heightPx = constraints.maxHeight.toFloat()
+        fun jump(y: Float) {
+            dragFraction = (y / heightPx).coerceIn(0f, 1f)
+            val index = (dragFraction * (count - 1)).roundToInt()
+            val l = labelFor(index)
+            if (l != label) { label = l; haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
+            scope.launch { listState.scrollToItem(index + itemOffset) }
+        }
+        Canvas(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { this.alpha = alpha }
+                .then(
+                    if (shown) Modifier.pointerInput(count) {
+                        detectVerticalDragGestures(
+                            onDragStart = { dragging = true; jump(it.y) },
+                            onDragEnd = { dragging = false },
+                            onDragCancel = { dragging = false },
+                        ) { change, _ -> change.consume(); jump(change.position.y) }
+                    } else Modifier,
+                ),
+        ) {
+            val x = size.width - 10.dp.toPx()
+            val step = 9.dp.toPx()
+            var y = step
+            while (y < size.height - step) {
+                drawCircle(Dot.Faint, 1.4.dp.toPx(), Offset(x, y))
+                y += step
+            }
+            val ty = 14.dp.toPx() + fraction * (size.height - 28.dp.toPx())
+            for (k in -2..2) drawCircle(if (dragging) Dot.Red else Dot.White, 2.6.dp.toPx(), Offset(x, ty + k * 5.dp.toPx()))
+        }
+        if (dragging) {
+            val pad = with(LocalDensity.current) { 14.dp.toPx() }
+            val bubbleY = pad + fraction * (heightPx - pad * 2)
+            Box(
+                Modifier
+                    .offset { IntOffset(-90.dp.roundToPx(), (bubbleY - 32.dp.toPx()).roundToInt()) }
+                    .size(64.dp)
+                    .clip(CircleShape)
+                    .background(Dot.White),
+                contentAlignment = Alignment.Center,
+            ) { DotTitle(label, size = 30.sp, color = Dot.Black) }
+        }
     }
 }
 
