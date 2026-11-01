@@ -166,8 +166,10 @@ class DotEngine(
                     val d = duration()
                     progress = if (d > 0) (active.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
                     trackListening()
+                    learnTempo()
                 }
                 trackListening()
+                stopLearningTempo()
             }
         }
     }
@@ -445,6 +447,36 @@ class DotEngine(
     private fun flushListening() {
         if (listenAcc > 0 && listenSong >= 0) store.addListen(listenSong, listenAcc)
         listenAcc = 0
+    }
+
+    // ---- Tempo learning for mood mixes ----
+
+    private var tempoSong = -1L
+    private var tempoSince = 0L
+    private var tempoListening = false
+
+    /**
+     * Listens to each new song's first 25 seconds to learn its tempo, then stops; songs that
+     * already have a tempo cost nothing.
+     */
+    private fun learnTempo() {
+        val song = _state.value.current?.id ?: return
+        if (song in store.bpm.value) { stopLearningTempo(); return }
+        if (!tempoListening) { spectrum.acquire(needsWave = false); tempoListening = true }
+        val now = SystemClock.uptimeMillis()
+        if (song != tempoSong) {
+            tempoSong = song
+            tempoSince = now
+            spectrum.resetTempo()
+        } else if (now - tempoSince > 25_000 && spectrum.bpm > 0) {
+            store.setBpm(song, spectrum.bpm)
+            stopLearningTempo()
+        }
+    }
+
+    private fun stopLearningTempo() {
+        if (tempoListening) { spectrum.release(needsWave = false); tempoListening = false }
+        tempoSong = -1L
     }
 
     // ---- Crossfade ----------------------------------------------------------------------
