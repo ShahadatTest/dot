@@ -88,12 +88,12 @@ fun LyricsView(modifier: Modifier = Modifier) {
         return
     }
 
-    // Playhead read every frame while visible, so the karaoke fill is smooth.
+    // Playhead read about 30 times a second while visible, so the karaoke fill stays smooth.
     var position by remember { mutableLongStateOf(engine.position()) }
     LaunchedEffect(state.playing) {
         while (true) {
             withFrameNanos { position = engine.position() }
-            if (!state.playing) { delay(250) }
+            delay(if (state.playing) 33 else 250) // ~30 fps is smooth enough for the fill
         }
     }
 
