@@ -156,11 +156,17 @@ class DotEngine(
             ).collect { applyFx() }
         }
         scope.launch {
+            // Sleeps completely while paused and only ticks while music is playing.
             while (isActive) {
-                delay(if (wantPlay) 100 else 500)
-                autoCrossfadeTick()
-                val d = duration()
-                progress = if (d > 0) (active.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
+                _state.first { it.playing }
+                lastTick = SystemClock.uptimeMillis()
+                while (isActive && wantPlay) {
+                    delay(100)
+                    autoCrossfadeTick()
+                    val d = duration()
+                    progress = if (d > 0) (active.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
+                    trackListening()
+                }
                 trackListening()
             }
         }
@@ -408,7 +414,7 @@ class DotEngine(
     private var listenAcc = 0L
     private var lastTick = SystemClock.uptimeMillis()
 
-    /** Counts real listening time, flushed every few seconds and on every change of song. */
+    /** Counts real listening time, flushed every minute, on pause and on every change of song. */
     private fun trackListening() {
         val now = SystemClock.uptimeMillis()
         val dt = (now - lastTick).coerceIn(0, 1000)
@@ -417,7 +423,7 @@ class DotEngine(
         if (active.isPlaying && current != null) {
             if (current != listenSong) { flushListening(); listenSong = current }
             listenAcc += dt
-            if (listenAcc >= 5000) flushListening()
+            if (listenAcc >= 60_000) flushListening()
         } else {
             flushListening()
         }
