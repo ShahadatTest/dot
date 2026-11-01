@@ -53,6 +53,10 @@ class Settings(context: Context) {
     val stripStyle = int("strip_style", 0)
     val artStyle = int("art_style", 0)
 
+    /** Per-song lyrics timing shift in ms; positive shows lines later. */
+    fun lyricsOffset(songId: Long): Int = sp.getInt("lrc_off_$songId", 0)
+    fun setLyricsOffset(songId: Long, ms: Int) = sp.edit().putInt("lrc_off_$songId", ms).apply()
+
     // Restored session
     val queueIds = string("q_ids", "")
     val queueIndex = int("q_index", 0)
