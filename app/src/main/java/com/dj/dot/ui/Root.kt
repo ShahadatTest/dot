@@ -228,8 +228,8 @@ private fun MiniPlayer(song: Song, playing: Boolean, onOpen: () -> Unit) {
                 Text(song.title, color = Dot.White, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(song.artist, color = Dot.Muted, style = MonoSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            IconBtn(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, engine::toggle, size = 28.dp)
-            IconBtn(Icons.Rounded.SkipNext, engine::next)
+            DotIconBtn(if (playing) DotIcons.Pause else DotIcons.Play, engine::toggle, size = 22.dp)
+            DotIconBtn(DotIcons.Next, engine::next, size = 20.dp)
         }
         val fraction = if (dur > 0) (pos.toFloat() / dur).coerceIn(0f, 1f) else 0f
         Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp).height(2.dp).background(Dot.Faint)) {

@@ -94,7 +94,7 @@ fun PlaylistScreen(id: String) {
                 playlist.name, "${songs.size} songs", songs, cover = songs.firstOrNull(), playlistId = playlist.id,
                 actions = {
                     Box {
-                        IconBtn(Icons.Rounded.MoreVert, { menu = true })
+                        DotIconBtn(DotIcons.More, { menu = true }, size = 16.dp)
                         DropdownMenu(menu, { menu = false }) {
                             DropdownMenuItem({ Text("Rename") }, { menu = false; renaming = true })
                             DropdownMenuItem({ Text("Delete", color = Dot.Red) }, { menu = false; dot.store.delete(playlist.id); app.pop() })
@@ -147,8 +147,8 @@ private fun SongListScreen(
                 Label(meta, align = TextAlign.Center)
                 Spacer(Modifier.height(18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Pill("Play", { dot.engine.playSongs(songs, 0) }, accent = true, icon = Icons.Rounded.PlayArrow)
-                    Pill("Shuffle", { dot.engine.playSongs(songs, shuffleAll = true) }, icon = Icons.Rounded.Shuffle)
+                    Pill("Play", { dot.engine.playSongs(songs, 0) }, accent = true, dot = DotIcons.Play)
+                    Pill("Shuffle", { dot.engine.playSongs(songs, shuffleAll = true) }, dot = DotIcons.Shuffle)
                 }
                 Spacer(Modifier.height(14.dp))
                 DottedDivider()

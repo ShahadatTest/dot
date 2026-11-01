@@ -73,8 +73,8 @@ fun HomeScreen() {
                 DotTitle("Dot", size = 40.sp)
                 Box(Modifier.padding(start = 4.dp, bottom = 11.dp).size(8.dp).clip(CircleShape).background(Dot.Red))
             }
-            IconBtn(Icons.Rounded.Search, { app.push(Screen.Search) })
-            IconBtn(Icons.Rounded.Settings, { app.push(Screen.Settings) })
+            DotIconBtn(DotIcons.Search, { app.push(Screen.Search) })
+            DotIconBtn(DotIcons.Settings, { app.push(Screen.Settings) })
         }
         LazyRow(
             contentPadding = PaddingValues(horizontal = 20.dp),
@@ -124,7 +124,7 @@ private fun SongsTab() {
                         Label("${songs.size} songs", Modifier.weight(1f))
                         Pill(sortNames[sort], { dot.settings.songSort.set((sort + 1) % sortNames.size) })
                         Spacer(Modifier.width(8.dp))
-                        Pill("Shuffle", { dot.engine.playSongs(songs, shuffleAll = true) }, accent = true, icon = Icons.Rounded.Shuffle)
+                        Pill("Shuffle", { dot.engine.playSongs(songs, shuffleAll = true) }, accent = true, dot = DotIcons.Shuffle)
                     }
                 }
                 itemsIndexed(songs, key = { _, s -> s.id }) { i, s ->
@@ -224,7 +224,7 @@ private fun PlaylistsTab() {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
         item {
             Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                Pill("New playlist", { creating = true }, accent = true, icon = Icons.Rounded.Add)
+                Pill("New playlist", { creating = true }, accent = true, dot = DotIcons.Plus)
             }
         }
         item { ListRow("Favourites", "${favs.size} songs", { app.push(Screen.Playlist(SMART_FAVOURITES)) }) { IconTile(Icons.Rounded.Favorite, red = true) } }
