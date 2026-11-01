@@ -112,6 +112,21 @@ class DotEngine(
     private val audioSessionId = Util.generateAudioSessionIdV21(app)
     val fx = AudioFx(audioSessionId)
 
+    /**
+     * Only the audio containers a local music library uses. Registering these explicitly instead
+     * of the default factory keeps video, streaming and image extractors out of the app.
+     */
+    // Declared before the players: they read it while being constructed.
+    private val audioSources by lazy {
+        val extractors = ExtractorsFactory {
+            arrayOf(
+                Mp3Extractor(), Mp4Extractor(), FragmentedMp4Extractor(), FlacExtractor(), OggExtractor(),
+                WavExtractor(), AdtsExtractor(), AmrExtractor(), MatroskaExtractor(),
+            )
+        }
+        DefaultMediaSourceFactory(app, extractors)
+    }
+
     private val players = arrayOf(newPlayer(), newPlayer())
     private var a = 0
     private val active: ExoPlayer get() = players[a]
@@ -183,20 +198,6 @@ class DotEngine(
                 tracker.pause()
             }
         }
-    }
-
-    /**
-     * Only the audio containers a local music library uses. Registering these explicitly instead
-     * of the default factory keeps video, streaming and image extractors out of the app.
-     */
-    private val audioSources by lazy {
-        val extractors = ExtractorsFactory {
-            arrayOf(
-                Mp3Extractor(), Mp4Extractor(), FragmentedMp4Extractor(), FlacExtractor(), OggExtractor(),
-                WavExtractor(), AdtsExtractor(), AmrExtractor(), MatroskaExtractor(),
-            )
-        }
-        DefaultMediaSourceFactory(app, extractors)
     }
 
     private fun newPlayer(): ExoPlayer {
