@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,7 +71,7 @@ fun SongMenuSheet(menu: SongMenu, onDismiss: () -> Unit) {
         sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Dot.Surface2,
     ) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+        Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Art(song, Modifier.size(56.dp), px = 168, shape = RoundedCornerShape(10.dp))
                 Spacer(Modifier.width(14.dp))
@@ -120,7 +121,7 @@ fun AddToPlaylistSheet(songs: List<Song>, onDismiss: () -> Unit) {
         sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = Dot.Surface2,
     ) {
-        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+        Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
             DotTitle("Add to playlist", size = 24.sp)
             Spacer(Modifier.height(12.dp))
             SheetItem("New playlist", Icons.Rounded.Add) { creating = true }
