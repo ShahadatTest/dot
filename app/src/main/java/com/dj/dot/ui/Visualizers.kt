@@ -111,7 +111,7 @@ fun rememberVizState(spectrum: Spectrum, playing: Boolean): VizState {
 // ---- Strip visualizers (under the art) ----------------------------------------------------
 
 @Composable
-fun StripVisualizer(state: VizState, style: StripStyle, modifier: Modifier = Modifier) {
+fun StripVisualizer(state: VizState, style: StripStyle, modifier: Modifier = Modifier, showReadout: Boolean = true) {
     Column(modifier) {
         Box(Modifier.fillMaxWidth().weight(1f)) {
             when (style) {
@@ -120,7 +120,7 @@ fun StripVisualizer(state: VizState, style: StripStyle, modifier: Modifier = Mod
                 StripStyle.Wave -> WaveViz(state, Modifier.fillMaxSize())
             }
         }
-        BeatReadout(state)
+        if (showReadout) BeatReadout(state)
     }
 }
 
