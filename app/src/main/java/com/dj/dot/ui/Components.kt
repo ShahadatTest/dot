@@ -59,6 +59,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -412,8 +413,20 @@ fun Art(song: Song?, modifier: Modifier = Modifier, px: Int = 192, shape: Shape 
     }
     Box(modifier.clip(shape).background(Dot.Surface2), contentAlignment = Alignment.Center) {
         val b = bitmap
-        if (b != null) Image(b, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        else DotPlaceholder(Modifier.fillMaxSize())
+        when {
+            b == null -> DotPlaceholder(Modifier.fillMaxSize())
+            // Square-ish covers fill the tile; a hair of trim is invisible.
+            b.width.toFloat() / b.height in 0.9f..1.1f -> Image(b, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+            // Wide or tall covers show in full over a blurred copy of themselves.
+            else -> {
+                Image(
+                    b, null,
+                    Modifier.fillMaxSize().blur(20.dp).graphicsLayer { alpha = 0.5f },
+                    contentScale = ContentScale.Crop,
+                )
+                Image(b, null, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            }
+        }
     }
 }
 
