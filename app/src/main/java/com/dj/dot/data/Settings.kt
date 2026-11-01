@@ -42,11 +42,16 @@ class Settings(context: Context) {
     val eqPreset = string("eq_preset", "Flat")
     val bassBoost = int("bass", 0)
     val loudness = int("loudness", 0)
+    val virtualizer = int("virtualizer", 0)
+    val reverb = int("reverb", 0)
+    val soundEffect = string("sound_effect", "Hi-Fi")
 
     // Library & UI
     val minDurationSec = int("min_duration", 30)
     val songSort = int("song_sort", 0)
     val visualizer = bool("visualizer", true)
+    val stripStyle = int("strip_style", 0)
+    val artStyle = int("art_style", 0)
 
     // Restored session
     val queueIds = string("q_ids", "")
