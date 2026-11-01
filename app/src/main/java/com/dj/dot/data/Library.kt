@@ -3,6 +3,7 @@ package com.dj.dot.data
 import android.content.ContentUris
 import android.content.Context
 import android.database.ContentObserver
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
@@ -14,6 +15,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 
 /** Indexes local audio from MediaStore and re-indexes when files change. */
 class Library(private val context: Context, private val scope: CoroutineScope, private val settings: Settings) {
@@ -24,6 +28,8 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
     private var observer: ContentObserver? = null
     private var scanJob: Job? = null
 
+    private val cacheFile = File(context.filesDir, "library_cache.json")
+
     fun start() {
         if (observer == null) {
             val o = object : ContentObserver(Handler(Looper.getMainLooper())) {
@@ -31,8 +37,18 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
             }
             context.contentResolver.registerContentObserver(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, true, o)
             observer = o
-            rescan()
+            scope.launch { openFromCache() }
         }
+    }
+
+    /**
+     * Shows the last known library straight away, then re-reads MediaStore only if Android
+     * reports a change since that snapshot (or the filters changed).
+     */
+    private suspend fun openFromCache() {
+        val cached = withContext(Dispatchers.IO) { readCache() }
+        if (cached != null) _data.value = withContext(Dispatchers.Default) { LibraryData.build(cached.second) }
+        if (cached == null || cached.first != snapshotKey()) rescan()
     }
 
     fun rescan(debounceMs: Long = 0) {
@@ -40,9 +56,48 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
         scanJob = scope.launch {
             delay(debounceMs)
             scanning.value = true
-            _data.value = withContext(Dispatchers.IO) { LibraryData.build(query()) }
+            val key = snapshotKey()
+            val songs = withContext(Dispatchers.IO) { query() }
+            _data.value = withContext(Dispatchers.Default) { LibraryData.build(songs) }
             scanning.value = false
+            withContext(Dispatchers.IO) { writeCache(key, songs) }
         }
+    }
+
+    /** MediaStore's change counter plus the scan filters; equal keys mean nothing changed. */
+    private fun snapshotKey(): String {
+        val generation = if (Build.VERSION.SDK_INT >= 30) {
+            runCatching { MediaStore.getExternalVolumeNames(context).sumOf { MediaStore.getGeneration(context, it) } }.getOrDefault(-1L)
+        } else -1L
+        return "$generation|${settings.minDurationSec.value}|${settings.hideWhatsApp.value}"
+    }
+
+    private fun readCache(): Pair<String, List<Song>>? = runCatching {
+        val root = JSONObject(cacheFile.readText())
+        val arr = root.getJSONArray("songs")
+        val songs = (0 until arr.length()).map { i ->
+            val a = arr.getJSONArray(i)
+            val id = a.getLong(0)
+            val path = a.getString(8)
+            Song(
+                id = id, title = a.getString(1), artist = a.getString(2), album = a.getString(3),
+                albumId = a.getLong(4), duration = a.getLong(5), track = a.getInt(6), year = a.getInt(7),
+                path = path, folder = path.substringBeforeLast('/', ""), dateAdded = a.getLong(9),
+                uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
+            )
+        }
+        root.getString("key") to songs
+    }.getOrNull()
+
+    private fun writeCache(key: String, songs: List<Song>) = runCatching {
+        val arr = JSONArray()
+        songs.forEach { s ->
+            arr.put(JSONArray().put(s.id).put(s.title).put(s.artist).put(s.album).put(s.albumId)
+                .put(s.duration).put(s.track).put(s.year).put(s.path).put(s.dateAdded))
+        }
+        val tmp = File(cacheFile.parentFile, "library_cache.json.tmp")
+        tmp.writeText(JSONObject().put("key", key).put("songs", arr).toString())
+        tmp.renameTo(cacheFile)
     }
 
     private fun query(): List<Song> {
