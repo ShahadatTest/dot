@@ -53,6 +53,7 @@ class Settings(context: Context) {
     val visualizer = bool("visualizer", true)
     val stripStyle = int("strip_style", 0)
     val artStyle = int("art_style", 0)
+    val glyphMode = int("glyph_mode", 1)
 
     /** Per-song lyrics timing shift in ms; positive shows lines later. */
     fun lyricsOffset(songId: Long): Int = sp.getInt("lrc_off_$songId", 0)
