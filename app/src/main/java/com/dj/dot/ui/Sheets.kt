@@ -65,7 +65,11 @@ fun SongMenuSheet(menu: SongMenu, onDismiss: () -> Unit) {
 
     fun done(action: () -> Unit) { action(); onDismiss() }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Dot.Surface2) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Dot.Surface2,
+    ) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Art(song, Modifier.size(56.dp), px = 168, shape = RoundedCornerShape(10.dp))
@@ -111,7 +115,11 @@ fun AddToPlaylistSheet(songs: List<Song>, onDismiss: () -> Unit) {
     val playlists by dot.store.playlists.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Dot.Surface2) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Dot.Surface2,
+    ) {
         Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
             DotTitle("Add to playlist", size = 24.sp)
             Spacer(Modifier.height(12.dp))
