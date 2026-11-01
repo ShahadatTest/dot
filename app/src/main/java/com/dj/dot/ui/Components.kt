@@ -328,23 +328,32 @@ fun EmptyState(title: String, hint: String, modifier: Modifier = Modifier) {
 
 /**
  * Glyph-style dot-matrix spectrum. Columns are frequency bands (bass on the left), rows light
- * from the bottom, and the peak dot of a loud band glows red.
+ * from the bottom, and the peak dot of a loud band glows red. On every detected beat the grid
+ * swells, the bottom rows flash red, and the beat dot under it blinks next to the live BPM.
  */
 @Composable
 fun GlyphVisualizer(spectrum: Spectrum, playing: Boolean, modifier: Modifier = Modifier, rows: Int = 9) {
     val cols = spectrum.bands
     val levels = remember { FloatArray(cols) }
     var frame by remember { mutableLongStateOf(0L) }
+    var pulse by remember { mutableStateOf(0f) }
+    var bpm by remember { mutableStateOf(0) }
 
     androidx.compose.runtime.DisposableEffect(Unit) {
         spectrum.enabled = true
         onDispose { spectrum.enabled = false }
     }
     LaunchedEffect(playing) {
+        var lastAudible = System.nanoTime() - AUDIO_LATENCY_NS
         while (true) {
             val settled = withFrameNanos { now ->
-                // Read the frame that is audible now, not the one just decoded.
-                val target = if (playing) spectrum.levelsAt(System.nanoTime() - 200_000_000L) else null
+                // Read what is audible now, not what was just decoded.
+                val audible = System.nanoTime() - AUDIO_LATENCY_NS
+                val target = if (playing) spectrum.levelsAt(audible) else null
+                val beat = if (playing) spectrum.beatBetween(lastAudible, audible) else 0f
+                lastAudible = audible
+                pulse = maxOf(pulse * 0.86f, beat)
+                bpm = spectrum.bpm
                 var max = 0f
                 for (i in 0 until cols) {
                     val t = target?.get(i) ?: 0f
@@ -353,28 +362,45 @@ fun GlyphVisualizer(spectrum: Spectrum, playing: Boolean, modifier: Modifier = M
                     max = maxOf(max, levels[i])
                 }
                 frame = now
-                !playing && max < 0.01f
+                !playing && max < 0.01f && pulse < 0.01f
             }
             if (settled) break
         }
     }
 
-    Canvas(modifier) {
-        frame // redraw every animation frame
-        val cw = size.width / cols
-        val rh = size.height / rows
-        val r = min(cw, rh) * 0.3f
-        for (c in 0 until cols) {
-            val lit = (levels[c] * rows).roundToInt()
-            for (row in 0 until rows) {
-                val on = row < lit
-                val color = when {
-                    on && row == lit - 1 && lit >= rows - 2 -> Dot.Red
-                    on -> Dot.White
-                    else -> Dot.Faint
+    Column(modifier) {
+        Canvas(Modifier.fillMaxWidth().weight(1f)) {
+            frame // redraw every animation frame
+            val cw = size.width / cols
+            val rh = size.height / rows
+            val r = min(cw, rh) * 0.3f * (1f + 0.22f * pulse)
+            val flashRows = if (pulse > 0.3f) 2 else 0
+            for (c in 0 until cols) {
+                val lit = (levels[c] * rows).roundToInt()
+                for (row in 0 until rows) {
+                    val on = row < lit
+                    val color = when {
+                        on && row < flashRows -> Dot.Red
+                        on && row == lit - 1 && lit >= rows - 2 -> Dot.Red
+                        on -> Dot.White
+                        else -> Dot.Faint
+                    }
+                    drawCircle(color, r, Offset(c * cw + cw / 2, size.height - (row * rh + rh / 2)))
                 }
-                drawCircle(color, r, Offset(c * cw + cw / 2, size.height - (row * rh + rh / 2)))
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(if (pulse > 0.25f) Dot.Red else Dot.Faint),
+            )
+            Spacer(Modifier.width(8.dp))
+            Label(if (bpm > 0) "$bpm BPM" else "— BPM", color = if (bpm > 0) Dot.White else Dot.Muted)
         }
     }
 }
+
+/** Roughly how far decoded audio runs ahead of the speaker. */
+private const val AUDIO_LATENCY_NS = 200_000_000L
