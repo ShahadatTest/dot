@@ -73,6 +73,7 @@ fun HomeScreen() {
                 DotTitle("Dot", size = 40.sp)
                 Box(Modifier.padding(start = 4.dp, bottom = 11.dp).size(8.dp).clip(CircleShape).background(Dot.Red))
             }
+            DotIconBtn(DotIcons.Stats, { app.push(Screen.Wrapped) })
             DotIconBtn(DotIcons.Search, { app.push(Screen.Search) })
             DotIconBtn(DotIcons.Settings, { app.push(Screen.Settings) })
         }

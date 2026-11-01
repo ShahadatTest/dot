@@ -67,6 +67,7 @@ sealed interface Screen {
     data object Search : Screen { override val key = "search" }
     data object Settings : Screen { override val key = "settings" }
     data object Equalizer : Screen { override val key = "eq" }
+    data object Wrapped : Screen { override val key = "wrapped" }
     data class Album(val id: Long) : Screen { override val key = "album/$id" }
     data class Artist(val name: String) : Screen { override val key = "artist/$name" }
     data class Folder(val path: String) : Screen { override val key = "folder/$path" }
@@ -190,6 +191,7 @@ private fun ScreenContent(screen: Screen) {
         Screen.Search -> SearchScreen()
         Screen.Settings -> SettingsScreen()
         Screen.Equalizer -> EqualizerScreen()
+        Screen.Wrapped -> WrappedScreen()
         is Screen.Album -> AlbumScreen(screen.id)
         is Screen.Artist -> ArtistScreen(screen.name)
         is Screen.Folder -> FolderScreen(screen.path)
