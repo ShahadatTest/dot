@@ -39,6 +39,14 @@ class DotService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
 
+    /** Swiping Dot away from recents stops the music and clears the notification. */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val engine = DotApp.instance.engine
+        engine.pause(fade = false)
+        engine.save()
+        stopSelf()
+    }
+
     override fun onDestroy() {
         DotApp.instance.engine.onSessionPlayerChanged = null
         session?.release()
