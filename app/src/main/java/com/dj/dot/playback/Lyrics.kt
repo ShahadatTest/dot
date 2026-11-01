@@ -58,13 +58,36 @@ object LyricsParser {
         }
     }
 
-    /** A `.lrc` next to the audio file. Needs "All files access" since lrc files aren't media. */
+    /**
+     * A `.lrc` next to the audio file. Tries the exact file name first, then any `.lrc` in the
+     * folder whose name matches the song's title or file name once site tags in brackets and
+     * punctuation are stripped. Needs "All files access" since lrc files aren't media.
+     */
     fun sidecar(song: Song): Lyrics? {
         if (!Environment.isExternalStorageManager() || song.path.isEmpty()) return null
-        val base = song.path.substringBeforeLast('.')
-        val file = listOf("$base.lrc", "$base.LRC").map(::File).firstOrNull { it.canRead() } ?: return null
+        val audio = File(song.path)
+        val dir = audio.parentFile ?: return null
+        val base = audio.nameWithoutExtension
+        val file = listOf("$base.lrc", "$base.LRC").map { File(dir, it) }.firstOrNull { it.canRead() }
+            ?: matchByName(dir, listOf(song.title, base))
+            ?: return null
         return runCatching { parse(file.readText()) }.getOrNull()
     }
+
+    private fun matchByName(dir: File, names: List<String>): File? {
+        val keys = names.map(::normalize).filter { it.length >= 3 }.toSet()
+        if (keys.isEmpty()) return null
+        val candidates = dir.listFiles { f -> f.isFile && f.extension.equals("lrc", true) }.orEmpty()
+            .map { it to normalize(it.nameWithoutExtension) }
+        return candidates.firstOrNull { it.second in keys }?.first
+            ?: candidates.firstOrNull { (_, n) -> keys.any { k -> k.length >= 6 && n.length >= 6 && (n.contains(k) || k.contains(n)) } }?.first
+    }
+
+    /** "Chitta Kurta (DjPunjab.CoM)" and "Chitta_Kurta" both become "chitta kurta". */
+    private fun normalize(name: String): String = name.lowercase()
+        .replace(Regex("""[(\[{][^)\]}]*[)\]}]"""), " ")
+        .replace(Regex("""[^\p{L}\p{N}]+"""), " ")
+        .trim()
 
     @OptIn(UnstableApi::class)
     fun embedded(tracks: Tracks): Lyrics? {
