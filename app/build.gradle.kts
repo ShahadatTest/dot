@@ -16,6 +16,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        // Dot's UI is English and it ships for phones; drop library translations and other CPUs.
+        androidResources.localeFilters += "en"
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {
@@ -31,6 +34,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
+    packaging {
+        resources.excludes += listOf(
+            "META-INF/**/LICENSE.txt", "META-INF/*.version", "META-INF/*.kotlin_module",
+            "kotlin/**", "DebugProbesKt.bin", "kotlin-tooling-metadata.json",
+        )
+    }
 }
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
