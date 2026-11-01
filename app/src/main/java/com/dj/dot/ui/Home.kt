@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -115,20 +116,42 @@ private fun SongsTab() {
     when {
         !lib.ready -> EmptyState("Scanning", "Looking for music on your phone")
         songs.isEmpty() -> EmptyState("No music", "Copy songs into the Music folder and they'll show up here.")
-        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-            item(key = "header") {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Label("${songs.size} songs", Modifier.weight(1f))
-                    Pill(sortNames[sort], { dot.settings.songSort.set((sort + 1) % sortNames.size) })
-                    Spacer(Modifier.width(8.dp))
-                    Pill("Shuffle", { dot.engine.playSongs(songs, shuffleAll = true) }, accent = true, icon = Icons.Rounded.Shuffle)
+        else -> Box(Modifier.fillMaxSize()) {
+            val listState = rememberLazyListState()
+            LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
+                item(key = "header") {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Label("${songs.size} songs", Modifier.weight(1f))
+                        Pill(sortNames[sort], { dot.settings.songSort.set((sort + 1) % sortNames.size) })
+                        Spacer(Modifier.width(8.dp))
+                        Pill("Shuffle", { dot.engine.playSongs(songs, shuffleAll = true) }, accent = true, icon = Icons.Rounded.Shuffle)
+                    }
+                }
+                itemsIndexed(songs, key = { _, s -> s.id }) { i, s ->
+                    SongRow(s, s.id == currentId, onClick = { dot.engine.playSongs(songs, i) }, onMore = { app.menu = SongMenu(s) })
                 }
             }
-            itemsIndexed(songs, key = { _, s -> s.id }) { i, s ->
-                SongRow(s, s.id == currentId, onClick = { dot.engine.playSongs(songs, i) }, onMore = { app.menu = SongMenu(s) })
-            }
+            FastScroller(
+                listState, songs.size, itemOffset = 1,
+                labelFor = { i ->
+                    val song = songs[i]
+                    when (sort) {
+                        1 -> initial(song.artist)
+                        2 -> monthLabel.format(java.util.Date(song.dateAdded * 1000))
+                        else -> initial(song.title)
+                    }
+                },
+                modifier = Modifier.align(Alignment.CenterEnd),
+            )
         }
     }
+}
+
+private val monthLabel = java.text.SimpleDateFormat("MMM", java.util.Locale.getDefault())
+
+private fun initial(text: String): String {
+    val c = text.trimStart().firstOrNull()?.uppercaseChar() ?: return "#"
+    return if (c.isLetter()) c.toString() else "#"
 }
 
 @Composable
@@ -159,14 +182,18 @@ private fun ArtistsTab() {
     val app = LocalAppState.current
     val lib by DotApp.instance.library.data.collectAsStateWithLifecycle()
     if (lib.ready && lib.artists.isEmpty()) return EmptyState("No artists", "Artists appear once music is found.")
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-        items(lib.artists, key = { it.name }) { artist ->
-            ListRow(
-                title = artist.name,
-                subtitle = "${artist.songs.size} songs · ${artist.albumCount} albums",
-                onClick = { app.push(Screen.Artist(artist.name)) },
-            ) { Art(artist.songs.first(), Modifier.size(52.dp), px = 156, shape = CircleShape) }
+    val listState = rememberLazyListState()
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(bottom = 16.dp)) {
+            items(lib.artists, key = { it.name }) { artist ->
+                ListRow(
+                    title = artist.name,
+                    subtitle = "${artist.songs.size} songs · ${artist.albumCount} albums",
+                    onClick = { app.push(Screen.Artist(artist.name)) },
+                ) { Art(artist.songs.first(), Modifier.size(52.dp), px = 156, shape = CircleShape) }
+            }
         }
+        FastScroller(listState, lib.artists.size, itemOffset = 0, labelFor = { initial(lib.artists[it].name) }, modifier = Modifier.align(Alignment.CenterEnd))
     }
 }
 
