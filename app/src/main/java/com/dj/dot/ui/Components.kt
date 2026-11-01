@@ -1,6 +1,8 @@
 package com.dj.dot.ui
 
 import android.content.Context
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.ui.composed
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
@@ -111,6 +113,18 @@ fun formatTime(ms: Long): String {
     return if (s >= 3600) "%d:%02d:%02d".format(s / 3600, s % 3600 / 60, s % 60) else "%d:%02d".format(s / 60, s % 60)
 }
 
+/** Shrinks a little while pressed and springs back, for any clickable. */
+fun Modifier.pressable(interaction: androidx.compose.foundation.interaction.MutableInteractionSource, pressedScale: Float = 0.86f): Modifier =
+    composed {
+        val pressed by interaction.collectIsPressedAsState()
+        val scale by animateFloatAsState(
+            if (pressed) pressedScale else 1f,
+            androidx.compose.animation.core.spring(dampingRatio = 0.5f, stiffness = if (pressed) 1200f else 500f),
+            label = "press",
+        )
+        graphicsLayer { scaleX = scale; scaleY = scale }
+    }
+
 // ---- Controls -----------------------------------------------------------------------------
 
 @Composable
@@ -121,7 +135,6 @@ fun Pill(
     selected: Boolean = false,
     accent: Boolean = false,
     icon: ImageVector? = null,
-    dot: DotGlyph? = null,
 ) {
     val bg by androidx.compose.animation.animateColorAsState(
         when { selected -> Dot.White; accent -> Dot.Red; else -> Color.Transparent }, tween(200), label = "pillBg",
@@ -140,7 +153,6 @@ fun Pill(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (icon != null) Icon(icon, null, tint = fg, modifier = Modifier.size(16.dp))
-        if (dot != null) DotIcon(dot, color = fg, size = 14.dp)
         Text(text.uppercase(), color = fg, style = MonoLabel, fontWeight = FontWeight.Bold)
     }
 }
