@@ -49,7 +49,7 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 enum class StripStyle(val label: String) { Grid("Grid"), Mirror("Mirror"), Wave("Wave") }
-enum class ArtStyle(val label: String) { Cover("Cover"), DotArt("Dot art"), Halo("Halo") }
+enum class ArtStyle(val label: String) { Cover("Cover"), DotArt("Dot art"), Halo("Halo"), Vinyl("Vinyl") }
 
 /** Roughly how far decoded audio runs ahead of the speaker. */
 private const val AUDIO_LATENCY_NS = 200_000_000L

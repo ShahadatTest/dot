@@ -99,11 +99,12 @@ fun VisualsSheet(song: Song, playing: Boolean, onDismiss: () -> Unit) {
             SectionHeader("Cover", "Tap the art on the player to cycle")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 ArtStyle.entries.forEach { style ->
-                    Tile(style.label, artStyle == style.ordinal, Modifier.weight(1f).aspectRatio(0.82f), { pick { s.artStyle.set(style.ordinal) } }) {
+                    Tile(style.label, artStyle == style.ordinal, Modifier.weight(1f).aspectRatio(0.78f), { pick { s.artStyle.set(style.ordinal) } }) {
                         when (style) {
                             ArtStyle.Cover -> Art(song, Modifier.fillMaxSize().padding(10.dp), px = 300, shape = RoundedCornerShape(10.dp))
                             ArtStyle.DotArt -> DotArtViz(song, viz, Modifier.fillMaxSize().padding(8.dp), grid = 30)
                             ArtStyle.Halo -> HaloViz(song, viz, Modifier.fillMaxSize().padding(6.dp))
+                            ArtStyle.Vinyl -> VinylViz(song, playing, Modifier.fillMaxSize().padding(6.dp), interactive = false)
                         }
                     }
                 }

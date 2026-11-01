@@ -215,7 +215,7 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
     val stripStyleIndex by dot.settings.stripStyle.flow.collectAsStateWithLifecycle()
     val artStyle = ArtStyle.entries[artStyleIndex.coerceIn(0, ArtStyle.entries.lastIndex)]
     val stripStyle = StripStyle.entries[stripStyleIndex.coerceIn(0, StripStyle.entries.lastIndex)]
-    val needsAnalysis = showViz || artStyle != ArtStyle.Cover
+    val needsAnalysis = showViz || artStyle == ArtStyle.DotArt || artStyle == ArtStyle.Halo
     var dragX by remember { mutableFloatStateOf(0f) }
     var flash by remember { mutableStateOf<String?>(null) }
     var hearts by remember { androidx.compose.runtime.mutableIntStateOf(0) }
@@ -228,7 +228,9 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
             Modifier
                 .weight(1f, fill = false)
                 .aspectRatio(1f)
-                .pointerInput(Unit) {
+                // On the record, sideways drags scratch instead of skipping.
+                .pointerInput(artStyle) {
+                    if (artStyle == ArtStyle.Vinyl) return@pointerInput
                     detectHorizontalDragGestures(
                         onDragEnd = {
                             if (dragX < -120f) engine.next() else if (dragX > 120f) engine.previous()
@@ -257,6 +259,7 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
             when {
                 artStyle == ArtStyle.DotArt && viz != null -> DotArtViz(song, viz, Modifier.fillMaxSize())
                 artStyle == ArtStyle.Halo && viz != null -> HaloViz(song, viz, Modifier.fillMaxSize())
+                artStyle == ArtStyle.Vinyl -> VinylViz(song, playing, Modifier.fillMaxSize())
                 else -> Art(song, Modifier.fillMaxSize(), px = 1080, shape = RoundedCornerShape(26.dp))
             }
             HeartBurst(hearts)
