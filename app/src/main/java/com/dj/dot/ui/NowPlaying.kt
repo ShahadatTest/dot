@@ -1,0 +1,330 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+
+package com.dj.dot.ui
+
+import android.os.SystemClock
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.KeyboardArrowUp
+import androidx.compose.material.icons.rounded.Lyrics
+import androidx.compose.material.icons.rounded.Pause
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
+import com.dj.dot.DotApp
+import kotlinx.coroutines.delay
+
+private enum class Panel { Art, Lyrics, Queue }
+
+@Composable
+fun NowPlayingScreen(onClose: () -> Unit) {
+    val dot = DotApp.instance
+    val engine = dot.engine
+    val app = LocalAppState.current
+    val state by engine.state.collectAsStateWithLifecycle()
+    val favs by dot.store.favourites.collectAsStateWithLifecycle()
+    val showViz by dot.settings.visualizer.flow.collectAsStateWithLifecycle()
+    val sleepAt by engine.sleepAt.collectAsStateWithLifecycle()
+    val song = state.current ?: return
+    var panel by remember { mutableStateOf(Panel.Art) }
+    var sleepSheet by remember { mutableStateOf(false) }
+    var pullDown by remember { mutableFloatStateOf(0f) }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .background(Dot.Black)
+            .pointerInput(Unit) {
+                detectVerticalDragGestures(
+                    onDragEnd = { if (pullDown > 220f) onClose(); pullDown = 0f },
+                    onDragCancel = { pullDown = 0f },
+                ) { _, dy -> pullDown = (pullDown + dy).coerceAtLeast(0f) }
+            }
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .padding(horizontal = 22.dp),
+    ) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconBtn(Icons.Rounded.KeyboardArrowDown, onClose, size = 30.dp)
+            Label("Now playing", Modifier.weight(1f), color = Dot.White, align = TextAlign.Center)
+            IconBtn(Icons.Rounded.GraphicEq, { app.push(Screen.Equalizer) })
+        }
+
+        Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            AnimatedContent(panel, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "panel") { p ->
+                when (p) {
+                    Panel.Art -> ArtPanel(song, state.playing, showViz)
+                    Panel.Lyrics -> LyricsPanel()
+                    Panel.Queue -> QueuePanel()
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                DotTitle(song.title, Modifier.basicMarquee(), size = 28.sp)
+                Text(
+                    "${song.artist}  ·  ${song.album}", color = Dot.Muted, style = MonoSmall,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            val fav = song.id in favs
+            IconBtn(
+                if (fav) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                { dot.store.toggleFavourite(song.id) },
+                tint = if (fav) Dot.Red else Dot.White,
+            )
+        }
+
+        Spacer(Modifier.height(10.dp))
+        val (pos, dur) = rememberProgress(200)
+        DotSlider(if (dur > 0) pos.toFloat() / dur else 0f, { engine.seekTo((it * dur).toLong()) })
+        Row(Modifier.fillMaxWidth()) {
+            Label(formatTime(pos), Modifier.weight(1f))
+            Label("-" + formatTime(dur - pos))
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            ToggleIcon(Icons.Rounded.Shuffle, state.shuffle, engine::toggleShuffle)
+            IconBtn(Icons.Rounded.SkipPrevious, engine::previous, size = 34.dp)
+            Box(
+                Modifier.size(78.dp).clip(CircleShape).background(Dot.White).clickable(onClick = engine::toggle),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(if (state.playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Dot.Black, modifier = Modifier.size(38.dp))
+            }
+            IconBtn(Icons.Rounded.SkipNext, engine::next, size = 34.dp)
+            ToggleIcon(
+                if (state.repeat == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                state.repeat != Player.REPEAT_MODE_OFF,
+                engine::cycleRepeat,
+            )
+        }
+
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)) {
+            Pill("Lyrics", { panel = if (panel == Panel.Lyrics) Panel.Art else Panel.Lyrics }, selected = panel == Panel.Lyrics, icon = Icons.Rounded.Lyrics)
+            Pill("Queue", { panel = if (panel == Panel.Queue) Panel.Art else Panel.Queue }, selected = panel == Panel.Queue, icon = Icons.AutoMirrored.Rounded.QueueMusic)
+            Pill(sleepLabel(sleepAt), { sleepSheet = true }, selected = sleepAt != 0L, icon = Icons.Rounded.Bedtime)
+        }
+    }
+
+    if (sleepSheet) SleepSheet(onDismiss = { sleepSheet = false })
+}
+
+@Composable
+private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Boolean) {
+    val engine = DotApp.instance.engine
+    var dragX by remember { mutableFloatStateOf(0f) }
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        Art(
+            song,
+            Modifier
+                .weight(1f, fill = false)
+                .aspectRatio(1f)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            if (dragX < -120f) engine.next() else if (dragX > 120f) engine.previous()
+                            dragX = 0f
+                        },
+                        onDragCancel = { dragX = 0f },
+                    ) { _, dx -> dragX += dx }
+                },
+            px = 1080,
+            shape = RoundedCornerShape(26.dp),
+        )
+        if (showViz) {
+            Spacer(Modifier.height(18.dp))
+            GlyphVisualizer(engine.spectrum, playing, Modifier.fillMaxWidth().height(96.dp))
+        }
+    }
+}
+
+@Composable
+private fun LyricsPanel() {
+    val dot = DotApp.instance
+    val lyrics by dot.engine.lyrics.collectAsStateWithLifecycle()
+    val l = lyrics
+    if (l == null) {
+        EmptyState(
+            "No lyrics",
+            if (android.os.Environment.isExternalStorageManager()) "Put a .lrc file with the same name next to the song."
+            else "Embedded lyrics show here. For .lrc files, allow file access in Settings.",
+        )
+        return
+    }
+    val listState = rememberLazyListState()
+    val position by produceState(dot.engine.position()) {
+        while (true) { value = dot.engine.position(); delay(100) }
+    }
+    val current = l.lineAt(position)
+    LaunchedEffect(current) {
+        if (l.synced && current >= 0) listState.animateScrollToItem((current - 2).coerceAtLeast(0))
+    }
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 24.dp)) {
+        itemsIndexed(l.lines) { i, line ->
+            val active = !l.synced || i == current
+            Text(
+                line.text.ifBlank { "•" },
+                color = when {
+                    !l.synced -> Dot.White
+                    active -> Dot.White
+                    i < current -> Dot.Muted
+                    else -> Dot.Muted.copy(alpha = 0.55f)
+                },
+                fontSize = if (l.synced && active) 24.sp else 20.sp,
+                fontWeight = if (l.synced && active) FontWeight.Bold else FontWeight.Medium,
+                lineHeight = 30.sp,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(enabled = l.synced) { dot.engine.seekTo(line.timeMs) }
+                    .padding(vertical = 8.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun QueuePanel() {
+    val engine = DotApp.instance.engine
+    val state by engine.state.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (state.index - 1).coerceAtLeast(0))
+    Column(Modifier.fillMaxSize()) {
+        Label("Up next · ${state.queue.size - state.index - 1} songs", Modifier.padding(vertical = 8.dp))
+        LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+            itemsIndexed(state.queue, key = { i, s -> "$i-${s.id}" }) { i, s ->
+                val current = i == state.index
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { engine.jumpTo(i) }.padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Art(s, Modifier.size(42.dp), px = 126, shape = RoundedCornerShape(8.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(s.title, color = if (current) Dot.Red else if (i < state.index) Dot.Muted else Dot.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(s.artist, color = Dot.Muted, style = MonoSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (!current) {
+                        IconBtn(Icons.Rounded.KeyboardArrowUp, { engine.moveInQueue(i, i - 1) }, tint = Dot.Muted, size = 20.dp)
+                        IconBtn(Icons.Rounded.Close, { engine.removeFromQueue(i) }, tint = Dot.Muted, size = 18.dp)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToggleIcon(icon: ImageVector, on: Boolean, onClick: () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconBtn(icon, onClick, tint = if (on) Dot.Red else Dot.Muted)
+        Box(Modifier.size(4.dp).clip(CircleShape).background(if (on) Dot.Red else Dot.Black))
+    }
+}
+
+@Composable
+private fun sleepLabel(sleepAt: Long): String {
+    if (sleepAt == 0L) return "Sleep"
+    val left by produceState(sleepAt - SystemClock.elapsedRealtime(), sleepAt) {
+        while (true) { value = sleepAt - SystemClock.elapsedRealtime(); delay(1000) }
+    }
+    return formatTime(left.coerceAtLeast(0))
+}
+
+@Composable
+private fun SleepSheet(onDismiss: () -> Unit) {
+    val engine = DotApp.instance.engine
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Dot.Surface2) {
+        Column(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp)) {
+            DotTitle("Sleep timer", size = 24.sp)
+            Spacer(Modifier.height(4.dp))
+            Label("Music fades out gently, then stops")
+            Spacer(Modifier.height(16.dp))
+            listOf(15, 30, 45, 60, 90).forEach { m ->
+                SheetItem("$m minutes") { engine.setSleepTimer(m); onDismiss() }
+            }
+            SheetItem("End of this song") { engine.sleepAtEndOfSong(); onDismiss() }
+            SheetItem("Turn off", red = true) { engine.setSleepTimer(0); onDismiss() }
+        }
+    }
+}
+
+@Composable
+fun SheetItem(text: String, icon: ImageVector? = null, red: Boolean = false, onClick: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 14.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icon != null) {
+            Icon(icon, null, tint = if (red) Dot.Red else Dot.White, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(16.dp))
+        }
+        Text(text, color = if (red) Dot.Red else Dot.White, fontSize = 15.sp)
+    }
+}
