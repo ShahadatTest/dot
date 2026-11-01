@@ -340,27 +340,50 @@ private fun SleepSheet(onDismiss: () -> Unit) {
     val engine = DotApp.instance.engine
     val sleepAt by engine.sleepAt.collectAsStateWithLifecycle()
     var minutes by remember { mutableIntStateOf(30) }
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Dot.Surface2) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = Dot.Surface2,
+    ) {
         Column(
-            Modifier.fillMaxWidth().padding(horizontal = 24.dp).padding(bottom = 24.dp),
+            Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 24.dp).padding(bottom = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     DotTitle("Sleep timer", size = 24.sp)
-                    Label("Wind the dial · music fades out, then stops")
+                    Label("Wind the dial, then tap start")
                 }
                 IconBtn(Icons.Rounded.Close, onDismiss, tint = Dot.Muted)
             }
-            Spacer(Modifier.height(16.dp))
-            SleepDial(minutes, { minutes = it }, Modifier.fillMaxWidth(0.82f))
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(8.dp))
+            SleepDial(minutes, { minutes = it }, Modifier.fillMaxWidth(0.7f))
+            Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(15, 30, 45, 60, 90).forEach { m -> Pill("$m", { minutes = m }, selected = minutes == m) }
             }
             Spacer(Modifier.height(16.dp))
+            val startInteraction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .pressable(startInteraction, 0.96f)
+                    .clip(CircleShape)
+                    .background(Dot.Red)
+                    .clickable(startInteraction, androidx.compose.material3.ripple()) { engine.setSleepTimer(minutes); onDismiss() }
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Rounded.Bedtime, null, tint = Dot.White, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    if (minutes >= 60) "START · %d:%02d".format(minutes / 60, minutes % 60) else "START · $minutes MIN",
+                    color = Dot.White, style = MonoLabel, fontWeight = FontWeight.Bold, fontSize = 14.sp,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Pill("Start", { engine.setSleepTimer(minutes); onDismiss() }, accent = true, icon = Icons.Rounded.Bedtime)
                 Pill("End of song", { engine.sleepAtEndOfSong(); onDismiss() })
                 if (sleepAt != 0L) Pill("Turn off", { engine.setSleepTimer(0); onDismiss() })
             }
