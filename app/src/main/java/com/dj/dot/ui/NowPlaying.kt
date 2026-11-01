@@ -55,7 +55,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -117,7 +116,7 @@ fun NowPlayingScreen(onClose: () -> Unit) {
             IconBtn(Icons.Rounded.KeyboardArrowDown, onClose, size = 30.dp)
             Spacer(Modifier.width(44.dp))
             Label("Now playing", Modifier.weight(1f), color = Dot.White, align = TextAlign.Center)
-            IconBtn(Icons.Rounded.AutoAwesome, { visualsSheet = true }, tint = if (glyphMode != 0) Dot.Red else Dot.White, size = 22.dp)
+            GlyphIcon(glyphMode != 0) { visualsSheet = true }
             IconBtn(Icons.Rounded.GraphicEq, { app.push(Screen.Equalizer) })
         }
 
