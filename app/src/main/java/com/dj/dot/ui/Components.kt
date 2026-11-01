@@ -435,10 +435,12 @@ object ArtLoader {
 @Composable
 fun Art(song: Song?, modifier: Modifier = Modifier, px: Int = 192, shape: Shape = RoundedCornerShape(10.dp)) {
     val context = LocalContext.current
-    val key = song?.let { "${it.albumId}_$px" }
+    // Three buckets keep one decode per album per size class instead of one per call site.
+    val bucket = when { px <= 200 -> 192; px <= 640 -> 600; else -> 1080 }
+    val key = song?.let { "${it.albumId}_$bucket" }
     var bitmap by remember(key) { mutableStateOf(key?.let(ArtLoader::cached)) }
     LaunchedEffect(key) {
-        if (bitmap == null && song != null && key != null) bitmap = ArtLoader.load(context, song, key, px)
+        if (bitmap == null && song != null && key != null) bitmap = ArtLoader.load(context, song, key, bucket)
     }
     Box(modifier.clip(shape).background(Dot.Surface2), contentAlignment = Alignment.Center) {
         val b = bitmap

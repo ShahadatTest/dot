@@ -243,7 +243,7 @@ fun DotArtViz(song: Song, state: VizState, modifier: Modifier = Modifier, grid: 
     val context = LocalContext.current
     var halftone by remember(song.albumId) { mutableStateOf<Halftone?>(null) }
     LaunchedEffect(song.albumId) {
-        val art = ArtLoader.load(context, song, "${song.albumId}_512", 512)
+        val art = ArtLoader.load(context, song, "${song.albumId}_600", 600)
         halftone = withContext(Dispatchers.Default) { buildHalftone(art?.asAndroidBitmap(), grid) }
     }
 
