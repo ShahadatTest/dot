@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest an idea for Dot
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like?
+      description: Describe the feature and the problem it solves.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: How should it work?
+      description: Sketches, examples from other apps, or how it should look in Dot's style.
+  - type: checkboxes
+    id: offline
+    attributes:
+      label: Fits Dot
+      options:
+        - label: It works fully offline, without an internet connection
+          required: true
