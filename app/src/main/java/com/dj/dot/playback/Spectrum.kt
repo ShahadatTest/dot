@@ -28,10 +28,18 @@ import kotlin.math.sqrt
 @OptIn(UnstableApi::class)
 class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
     private val users = java.util.concurrent.atomic.AtomicInteger(0)
+    private val waveUsers = java.util.concurrent.atomic.AtomicInteger(0)
     /** True while at least one visualizer or the Glyph lights is listening. */
     val enabled: Boolean get() = users.get() > 0
-    fun acquire() { users.incrementAndGet() }
-    fun release() { users.updateAndGet { (it - 1).coerceAtLeast(0) } }
+    /** The Glyph strip only needs levels and beats, so it skips the waveform work. */
+    fun acquire(needsWave: Boolean = true) {
+        users.incrementAndGet()
+        if (needsWave) waveUsers.incrementAndGet()
+    }
+    fun release(needsWave: Boolean = true) {
+        users.updateAndGet { (it - 1).coerceAtLeast(0) }
+        if (needsWave) waveUsers.updateAndGet { (it - 1).coerceAtLeast(0) }
+    }
 
     private val n = 1024
     private val window = FloatArray(n) { (0.5 - 0.5 * cos(2 * PI * it / (n - 1))).toFloat() }
@@ -155,7 +163,9 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
             mags[b] = m
         }
         peak = max(mags.max(), max(peak * 0.995f, 1e-3f))
-        val levels = FloatArray(bands) { (log10(1f + 9f * mags[it] / peak)).coerceIn(0f, 1f) }
+        // History slots are reused rather than reallocated 43 times a second.
+        val levels = histV[head]?.takeIf { it.size == bands } ?: FloatArray(bands)
+        for (b in 0 until bands) levels[b] = (log10(1f + 9f * mags[b] / peak)).coerceIn(0f, 1f)
 
         // Spectral flux, kick range counted fully and the rest at a third.
         val kickTop = (180f / binHz).toInt()
@@ -188,16 +198,16 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
 
         // Waveform: average each 1/64th of the frame, normalised with a slow auto-gain.
         val step = n / wavePoints
-        val wave = FloatArray(wavePoints)
+        val wave = histWave[head] ?: FloatArray(wavePoints)
         var frameAmp = 0f
-        for (p in 0 until wavePoints) {
+        if (waveUsers.get() > 0) for (p in 0 until wavePoints) {
             var acc = 0f
             for (k in 0 until step) acc += ring[p * step + k]
             wave[p] = acc / step
             frameAmp = max(frameAmp, kotlin.math.abs(wave[p]))
         }
         waveAmp = max(frameAmp, max(waveAmp * 0.99f, 1e-3f))
-        for (p in 0 until wavePoints) wave[p] = (wave[p] / waveAmp).coerceIn(-1f, 1f)
+        if (waveUsers.get() > 0) for (p in 0 until wavePoints) wave[p] = (wave[p] / waveAmp).coerceIn(-1f, 1f)
 
         histT[head] = now
         histV[head] = levels

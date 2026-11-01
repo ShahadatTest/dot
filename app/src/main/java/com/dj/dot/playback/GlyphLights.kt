@@ -86,7 +86,7 @@ class GlyphLights(
     private fun run(mode: GlyphMode) {
         loop?.cancel()
         connect {
-            if (!listening) { spectrum.acquire(); listening = true }
+            if (!listening) { spectrum.acquire(needsWave = false); listening = true }
             loop = scope.launch { animate(mode) }
         }
     }
@@ -149,7 +149,7 @@ class GlyphLights(
     private fun idle() {
         loop?.cancel()
         loop = null
-        if (listening) { spectrum.release(); listening = false }
+        if (listening) { spectrum.release(needsWave = false); listening = false }
         preview = FloatArray(LEDS)
         scope.launch {
             runCatching { manager?.turnOff() }
@@ -161,7 +161,7 @@ class GlyphLights(
         const val TAG = "GlyphLights"
         const val LEDS = 6
         const val MAX = 4095
-        const val FRAME_MS = 33L
+        const val FRAME_MS = 50L
         const val LATENCY_NS = 200_000_000L
     }
 }
