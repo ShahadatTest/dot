@@ -12,6 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -179,11 +180,20 @@ fun NowPlayingScreen(onClose: () -> Unit) {
 
 @Composable
 private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Boolean) {
-    val engine = DotApp.instance.engine
+    val dot = DotApp.instance
+    val engine = dot.engine
+    val artStyleIndex by dot.settings.artStyle.flow.collectAsStateWithLifecycle()
+    val stripStyleIndex by dot.settings.stripStyle.flow.collectAsStateWithLifecycle()
+    val artStyle = ArtStyle.entries[artStyleIndex.coerceIn(0, ArtStyle.entries.lastIndex)]
+    val stripStyle = StripStyle.entries[stripStyleIndex.coerceIn(0, StripStyle.entries.lastIndex)]
+    val needsAnalysis = showViz || artStyle != ArtStyle.Cover
     var dragX by remember { mutableFloatStateOf(0f) }
+    var flash by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(flash) { if (flash != null) { delay(1100); flash = null } }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Art(
-            song,
+        val viz = if (needsAnalysis) rememberVizState(engine.spectrum, playing) else null
+        Box(
             Modifier
                 .weight(1f, fill = false)
                 .aspectRatio(1f)
@@ -195,13 +205,42 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
                         },
                         onDragCancel = { dragX = 0f },
                     ) { _, dx -> dragX += dx }
+                }
+                .pointerInput(artStyleIndex) {
+                    detectTapGestures {
+                        val next = (artStyleIndex + 1) % ArtStyle.entries.size
+                        dot.settings.artStyle.set(next)
+                        flash = ArtStyle.entries[next].label
+                    }
                 },
-            px = 1080,
-            shape = RoundedCornerShape(26.dp),
-        )
-        if (showViz) {
+            contentAlignment = Alignment.Center,
+        ) {
+            when {
+                artStyle == ArtStyle.DotArt && viz != null -> DotArtViz(song, viz, Modifier.fillMaxSize())
+                artStyle == ArtStyle.Halo && viz != null -> HaloViz(song, viz, Modifier.fillMaxSize())
+                else -> Art(song, Modifier.fillMaxSize(), px = 1080, shape = RoundedCornerShape(26.dp))
+            }
+            flash?.let {
+                Box(Modifier.align(Alignment.TopStart).padding(12.dp).clip(CircleShape).background(Dot.Black.copy(alpha = 0.7f)).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    Label(it, color = Dot.White)
+                }
+            }
+        }
+        if (showViz && viz != null) {
             Spacer(Modifier.height(18.dp))
-            GlyphVisualizer(engine.spectrum, playing, Modifier.fillMaxWidth().height(96.dp))
+            StripVisualizer(
+                viz, stripStyle,
+                Modifier
+                    .fillMaxWidth()
+                    .height(96.dp)
+                    .pointerInput(stripStyleIndex) {
+                        detectTapGestures {
+                            val next = (stripStyleIndex + 1) % StripStyle.entries.size
+                            dot.settings.stripStyle.set(next)
+                            flash = StripStyle.entries[next].label
+                        }
+                    },
+            )
         }
     }
 }
