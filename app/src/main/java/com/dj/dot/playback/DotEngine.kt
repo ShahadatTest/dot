@@ -29,6 +29,17 @@ import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.audio.TeeAudioProcessor
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.ExtractorsFactory
+import androidx.media3.extractor.amr.AmrExtractor
+import androidx.media3.extractor.flac.FlacExtractor
+import androidx.media3.extractor.mkv.MatroskaExtractor
+import androidx.media3.extractor.mp3.Mp3Extractor
+import androidx.media3.extractor.mp4.FragmentedMp4Extractor
+import androidx.media3.extractor.mp4.Mp4Extractor
+import androidx.media3.extractor.ogg.OggExtractor
+import androidx.media3.extractor.ts.AdtsExtractor
+import androidx.media3.extractor.wav.WavExtractor
 import com.dj.dot.data.Library
 import com.dj.dot.data.LibraryData
 import com.dj.dot.data.PlaylistStore
@@ -174,6 +185,20 @@ class DotEngine(
         }
     }
 
+    /**
+     * Only the audio containers a local music library uses. Registering these explicitly instead
+     * of the default factory keeps video, streaming and image extractors out of the app.
+     */
+    private val audioSources by lazy {
+        val extractors = ExtractorsFactory {
+            arrayOf(
+                Mp3Extractor(), Mp4Extractor(), FragmentedMp4Extractor(), FlacExtractor(), OggExtractor(),
+                WavExtractor(), AdtsExtractor(), AmrExtractor(), MatroskaExtractor(),
+            )
+        }
+        DefaultMediaSourceFactory(app, extractors)
+    }
+
     private fun newPlayer(): ExoPlayer {
         val renderers = object : DefaultRenderersFactory(app) {
             override fun buildAudioSink(
@@ -185,7 +210,7 @@ class DotEngine(
                 .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                 .build()
         }
-        return ExoPlayer.Builder(app, renderers)
+        return ExoPlayer.Builder(app, renderers, audioSources)
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(),
                 false, // focus is handled here, otherwise the two players would steal it from each other
