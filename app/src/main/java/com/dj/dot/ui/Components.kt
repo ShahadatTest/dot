@@ -120,20 +120,26 @@ fun Pill(
     selected: Boolean = false,
     accent: Boolean = false,
     icon: ImageVector? = null,
+    dot: DotGlyph? = null,
 ) {
-    val bg = when { selected -> Dot.White; accent -> Dot.Red; else -> Color.Transparent }
-    val fg = if (selected) Dot.Black else Dot.White
+    val bg by androidx.compose.animation.animateColorAsState(
+        when { selected -> Dot.White; accent -> Dot.Red; else -> Color.Transparent }, tween(200), label = "pillBg",
+    )
+    val fg by androidx.compose.animation.animateColorAsState(if (selected) Dot.Black else Dot.White, tween(200), label = "pillFg")
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
     Row(
         modifier
+            .pressable(interaction, 0.93f)
             .clip(CircleShape)
             .background(bg)
             .then(if (selected || accent) Modifier else Modifier.border(1.dp, Dot.Line, CircleShape))
-            .clickable(onClick = onClick)
+            .clickable(interaction, androidx.compose.material3.ripple(), onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         if (icon != null) Icon(icon, null, tint = fg, modifier = Modifier.size(16.dp))
+        if (dot != null) DotIcon(dot, color = fg, size = 14.dp)
         Text(text.uppercase(), color = fg, style = MonoLabel, fontWeight = FontWeight.Bold)
     }
 }
@@ -147,7 +153,12 @@ fun IconBtn(
     size: Dp = 24.dp,
     description: String? = null,
 ) {
-    Box(modifier.size(44.dp).clip(CircleShape).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    Box(
+        modifier.size(44.dp).pressable(interaction).clip(CircleShape)
+            .clickable(interaction, androidx.compose.material3.ripple(), onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
         Icon(icon, description, tint = tint, modifier = Modifier.size(size))
     }
 }
@@ -155,7 +166,7 @@ fun IconBtn(
 @Composable
 fun TopBar(title: String, onBack: () -> Unit, actions: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconBtn(Icons.AutoMirrored.Rounded.ArrowBack, onBack)
+        DotIconBtn(DotIcons.Back, onBack, size = 16.dp)
         Label(title, Modifier.weight(1f).padding(start = 4.dp), color = Dot.White)
         actions()
     }
@@ -473,7 +484,7 @@ fun SongRow(
             )
         }
         if (current) Box(Modifier.size(6.dp).clip(CircleShape).background(Dot.Red))
-        IconBtn(Icons.Rounded.MoreVert, onMore, tint = Dot.Muted, size = 20.dp)
+        DotIconBtn(DotIcons.More, onMore, tint = Dot.Muted, size = 16.dp)
     }
 }
 
