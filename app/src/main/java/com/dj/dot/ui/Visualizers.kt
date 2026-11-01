@@ -31,6 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -52,6 +54,7 @@ enum class ArtStyle(val label: String) { Cover("Cover"), DotArt("Dot art"), Halo
 /** Roughly how far decoded audio runs ahead of the speaker. */
 private const val AUDIO_LATENCY_NS = 200_000_000L
 private const val RIPPLE_NS = 1_200_000_000L
+private const val FRAME_NS = 15_000_000L
 
 /** Smoothed, speaker-aligned analysis shared by every visualizer on screen. */
 @Stable
@@ -74,8 +77,12 @@ fun rememberVizState(spectrum: Spectrum, playing: Boolean): VizState {
     }
     LaunchedEffect(playing) {
         var lastAudible = System.nanoTime() - AUDIO_LATENCY_NS
+        var lastFrame = 0L
         while (true) {
             val settled = withFrameNanos { now ->
+                // 60 fps is plenty for dots; skip every other frame on a 120 Hz screen.
+                if (now - lastFrame < FRAME_NS) return@withFrameNanos false
+                lastFrame = now
                 val audible = System.nanoTime() - AUDIO_LATENCY_NS
                 val target = if (playing) spectrum.levelsAt(audible) else null
                 val wave = if (playing) spectrum.waveAt(audible) else null
@@ -238,47 +245,60 @@ fun DotArtViz(song: Song, state: VizState, modifier: Modifier = Modifier, grid: 
         halftone = withContext(Dispatchers.Default) { buildHalftone(art?.asAndroidBitmap(), grid) }
     }
 
-    Canvas(modifier) {
+    // The halftone is painted once per size into a bitmap; each frame only scales it and
+    // lights the ripple band, instead of redrawing thousands of dots.
+    val cache = remember(halftone) { arrayOfNulls<androidx.compose.ui.graphics.ImageBitmap>(1) }
+    Canvas(modifier.graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }) {
         state.frame
         val h = halftone ?: return@Canvas
-        val n = h.grid
-        val step = min(size.width, size.height) / (n + 0.5f)
-        val rowStep = step * 0.866f // hex packing
-        val rows = (size.height / rowStep).toInt().coerceAtMost(n)
-        val ox = (size.width - step * (n - 0.5f)) / 2
-        val oy = (size.height - rowStep * (rows - 1)) / 2
-        val cx = size.width / 2
-        val cy = size.height / 2
+        val w = size.width.toInt().coerceAtLeast(1)
+        val hgt = size.height.toInt().coerceAtLeast(1)
+        val image = cache[0]?.takeIf { it.width == w && it.height == hgt } ?: paintHalftone(h, w, hgt).also { cache[0] = it }
+        val swell = 1f + 0.06f * state.pulse
+        val center = Offset(size.width / 2, size.height / 2)
         val maxDist = min(size.width, size.height) * 0.72f
-        val swell = 1f + 0.07f * state.pulse
+        val band = min(size.width, size.height) / h.grid * 3f
         val now = state.frame
-        val maxR = step * 0.56f
-
-        for (y in 0 until rows) {
-            val srcY = (y * n / rows).coerceIn(0, n - 1)
-            val shift = if (y % 2 == 1) step / 2 else 0f
-            val py = oy + y * rowStep
-            for (x in 0 until n) {
-                val px = ox + x * step + shift
-                if (px > size.width - step * 0.2f) continue
-                val i = srcY * n + x
-                val base = h.sizes[i]
-                var boost = 1f
-                if (state.ripples.isNotEmpty()) {
-                    val dx = px - cx
-                    val dy = py - cy
-                    val d = kotlin.math.sqrt(dx * dx + dy * dy) / maxDist
-                    for ((start, strength) in state.ripples) {
-                        val t = (now - start).toFloat() / RIPPLE_NS
-                        val k = (d - t) / 0.08f
-                        boost += 0.45f * strength * (1f - t) * kotlin.math.exp(-k * k)
-                    }
-                }
-                val r = (base * maxR * swell * boost).coerceIn(step * 0.06f, step * 0.62f)
-                drawCircle(androidx.compose.ui.graphics.Color(h.colors[i]), r, Offset(px, py))
+        withTransform({ scale(swell, swell, center) }) {
+            drawImage(image)
+            for ((start, strength) in state.ripples) {
+                val t = ((now - start).toFloat() / RIPPLE_NS).coerceIn(0f, 1f)
+                drawCircle(
+                    androidx.compose.ui.graphics.Color.White.copy(alpha = 0.6f * strength * (1f - t)),
+                    radius = (t * maxDist).coerceAtLeast(1f),
+                    center = center,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = band),
+                    blendMode = androidx.compose.ui.graphics.BlendMode.SrcAtop,
+                )
             }
         }
     }
+}
+
+/** Paints the hex-packed halftone dots once at the given size. */
+private fun paintHalftone(h: Halftone, width: Int, height: Int): androidx.compose.ui.graphics.ImageBitmap {
+    val bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bmp)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    val n = h.grid
+    val step = min(width, height) / (n + 0.5f)
+    val rowStep = step * 0.866f
+    val rows = (height / rowStep).toInt().coerceAtMost(n)
+    val ox = (width - step * (n - 0.5f)) / 2
+    val oy = (height - rowStep * (rows - 1)) / 2
+    val maxR = step * 0.56f
+    for (y in 0 until rows) {
+        val srcY = (y * n / rows).coerceIn(0, n - 1)
+        val shift = if (y % 2 == 1) step / 2 else 0f
+        for (x in 0 until n) {
+            val px = ox + x * step + shift
+            if (px > width - step * 0.2f) continue
+            val i = srcY * n + x
+            paint.color = h.colors[i]
+            canvas.drawCircle(px, oy + y * rowStep, (h.sizes[i] * maxR).coerceIn(step * 0.06f, step * 0.62f), paint)
+        }
+    }
+    return bmp.asImageBitmap()
 }
 
 private fun buildHalftone(source: Bitmap?, grid: Int): Halftone {
