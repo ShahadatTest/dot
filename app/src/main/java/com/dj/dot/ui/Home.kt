@@ -31,6 +31,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Bolt
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.Spa
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.History
@@ -221,6 +224,9 @@ private fun PlaylistsTab() {
     val app = LocalAppState.current
     val playlists by dot.store.playlists.collectAsStateWithLifecycle()
     val favs by dot.store.favourites.collectAsStateWithLifecycle()
+    val bpm by dot.store.bpm.collectAsStateWithLifecycle()
+    val lib by dot.library.data.collectAsStateWithLifecycle()
+    val moods = remember(bpm, lib) { bpm.filterKeys { it in lib.byId }.values.groupingBy { moodOf(it) }.eachCount() }
     var creating by remember { mutableStateOf(false) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
@@ -232,6 +238,10 @@ private fun PlaylistsTab() {
         item { ListRow("Favourites", "${favs.size} songs", { app.push(Screen.Playlist(SMART_FAVOURITES)) }) { IconTile(Icons.Rounded.Favorite, red = true) } }
         item { ListRow("Recently added", "Latest 100", { app.push(Screen.Playlist(SMART_RECENT)) }) { IconTile(Icons.Rounded.History) } }
         item { ListRow("Most played", "Your top 100", { app.push(Screen.Playlist(SMART_TOP)) }) { IconTile(Icons.AutoMirrored.Rounded.TrendingUp) } }
+        item { Label("Mood mixes · learned as you listen", Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)) }
+        item { ListRow("Chill", "${moods[SMART_CHILL] ?: 0} songs · slow and easy", { app.push(Screen.Playlist(SMART_CHILL)) }) { IconTile(Icons.Rounded.Spa) } }
+        item { ListRow("Groove", "${moods[SMART_GROOVE] ?: 0} songs · steady mid-tempo", { app.push(Screen.Playlist(SMART_GROOVE)) }) { IconTile(Icons.Rounded.GraphicEq) } }
+        item { ListRow("Hype", "${moods[SMART_HYPE] ?: 0} songs · fast and loud", { app.push(Screen.Playlist(SMART_HYPE)) }) { IconTile(Icons.Rounded.Bolt, red = true) } }
         if (playlists.isNotEmpty()) item { Label("Your playlists", Modifier.padding(start = 20.dp, top = 16.dp, bottom = 4.dp)) }
         items(playlists, key = { it.id }) { p ->
             ListRow(p.name, "${p.songIds.size} songs", { app.push(Screen.Playlist(p.id)) }) { IconTile(null, text = p.name.take(1)) }
@@ -243,6 +253,16 @@ private fun PlaylistsTab() {
 const val SMART_FAVOURITES = "smart:favourites"
 const val SMART_RECENT = "smart:recent"
 const val SMART_TOP = "smart:top"
+const val SMART_CHILL = "smart:chill"
+const val SMART_GROOVE = "smart:groove"
+const val SMART_HYPE = "smart:hype"
+
+/** Tempo bands for the mood mixes. */
+fun moodOf(bpm: Int): String = when {
+    bpm < 98 -> SMART_CHILL
+    bpm <= 125 -> SMART_GROOVE
+    else -> SMART_HYPE
+}
 
 @Composable
 fun ListRow(title: String, subtitle: String, onClick: () -> Unit, leading: @Composable () -> Unit) {

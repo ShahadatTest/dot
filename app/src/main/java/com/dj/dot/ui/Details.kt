@@ -85,6 +85,12 @@ fun PlaylistScreen(id: String) {
             }
             SongListScreen("Most played", "${songs.size} songs", songs, cover = songs.firstOrNull())
         }
+        SMART_CHILL, SMART_GROOVE, SMART_HYPE -> {
+            val tempo by dot.store.bpm.collectAsStateWithLifecycle()
+            val songs = remember(lib, tempo) { lib.songs.filter { s -> tempo[s.id]?.let { moodOf(it) == id } == true } }
+            val name = when (id) { SMART_CHILL -> "Chill"; SMART_GROOVE -> "Groove"; else -> "Hype" }
+            SongListScreen(name, "${songs.size} songs · grows as Dot learns your music", songs, cover = songs.firstOrNull())
+        }
         else -> {
             val playlist = playlists.firstOrNull { it.id == id } ?: return Missing()
             val songs = remember(lib, playlist) { playlist.songIds.mapNotNull { lib.byId[it] } }
