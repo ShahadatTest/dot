@@ -114,9 +114,9 @@ class DotEngine(
 
     /**
      * Only the audio containers a local music library uses. Registering these explicitly instead
-     * of the default factory keeps video, streaming and image extractors out of the app.
+     * of the default factory keeps video, streaming and image extractors out of the app. Declared
+     * before [players], which read it while being constructed.
      */
-    // Declared before the players: they read it while being constructed.
     private val audioSources by lazy {
         val extractors = ExtractorsFactory {
             arrayOf(
