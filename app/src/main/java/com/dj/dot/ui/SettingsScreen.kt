@@ -8,6 +8,12 @@ import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -58,7 +64,9 @@ fun SettingsScreen() {
     val minDur by s.minDurationSec.flow.collectAsStateWithLifecycle()
     val viz by s.visualizer.flow.collectAsStateWithLifecycle()
     val eqOn by s.eqEnabled.flow.collectAsStateWithLifecycle()
-    val preset by s.eqPreset.flow.collectAsStateWithLifecycle()
+    val effect by s.soundEffect.flow.collectAsStateWithLifecycle()
+    val artStyle by s.artStyle.flow.collectAsStateWithLifecycle()
+    val stripStyle by s.stripStyle.flow.collectAsStateWithLifecycle()
     val scanning by dot.library.scanning.collectAsStateWithLifecycle()
     val lib by dot.library.data.collectAsStateWithLifecycle()
 
@@ -90,7 +98,7 @@ fun SettingsScreen() {
         item { SwitchRow("Fade on play / pause", "Soft fade in and out instead of a hard cut", fadePause) { s.fadeOnPause.set(it) } }
 
         item { Section("Sound") }
-        item { NavRow("Equalizer", if (eqOn) preset else "Off") { app.push(Screen.Equalizer) } }
+        item { NavRow("Sound effects & equalizer", if (eqOn) effect else "Hi-Fi") { app.push(Screen.Equalizer) } }
         item {
             SliderRow("Playback speed", "%.2fX".format(speed), "Tap the value to reset", (speed - 0.5f) / 1.5f, onLabelClick = { dot.engine.setSpeed(1f) }) {
                 dot.engine.setSpeed(((0.5f + it * 1.5f) * 20).roundToInt() / 20f)
@@ -99,6 +107,8 @@ fun SettingsScreen() {
 
         item { Section("Look") }
         item { SwitchRow("Glyph visualizer", "Dot-matrix spectrum and beat pulse on Now Playing", viz) { s.visualizer.set(it) } }
+        if (viz) item { PickerRow("Visualizer style", "Or tap the visualizer to switch", StripStyle.entries.map { it.label }, stripStyle) { s.stripStyle.set(it) } }
+        item { PickerRow("Cover style", "Or tap the album art to switch", ArtStyle.entries.map { it.label }, artStyle) { s.artStyle.set(it) } }
 
         item { Section("Library") }
         item {
@@ -160,14 +170,31 @@ fun EqualizerScreen() {
     val on by s.eqEnabled.flow.collectAsStateWithLifecycle()
     val raw by s.eqLevels.flow.collectAsStateWithLifecycle()
     val preset by s.eqPreset.flow.collectAsStateWithLifecycle()
+    val effect by s.soundEffect.flow.collectAsStateWithLifecycle()
     val bass by s.bassBoost.flow.collectAsStateWithLifecycle()
     val loud by s.loudness.flow.collectAsStateWithLifecycle()
+    val surround by s.virtualizer.flow.collectAsStateWithLifecycle()
+    val reverb by s.reverb.flow.collectAsStateWithLifecycle()
     val levels = remember(raw) { dot.engine.parseLevels(raw) }
     val span = maxOf(-fx.range.first, fx.range.last).toFloat()
 
-    fun setLevels(l: List<Int>, name: String) {
-        s.eqLevels.set(l.joinToString(","))
-        s.eqPreset.set(name)
+    /** Any manual tweak turns sound on and marks the mode as custom. */
+    fun tweak(block: () -> Unit) {
+        if (!on) s.eqEnabled.set(true)
+        block()
+        s.soundEffect.set("Custom")
+    }
+
+    fun applyEffect(e: AudioFx.SoundEffect) {
+        val curve = AudioFx.presets.first { it.first == e.eq }.second
+        s.eqEnabled.set(e.name != "Hi-Fi")
+        s.eqLevels.set(AudioFx.presetLevels(curve, fx.bandCount, fx.range).joinToString(","))
+        s.eqPreset.set(e.eq)
+        s.bassBoost.set(e.bass)
+        s.virtualizer.set(e.surround)
+        s.reverb.set(e.reverb)
+        s.loudness.set(e.loudness)
+        s.soundEffect.set(e.name)
     }
 
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding(), contentPadding = PaddingValues(bottom = 32.dp)) {
@@ -176,24 +203,40 @@ fun EqualizerScreen() {
                 Switch(on, { s.eqEnabled.set(it) }, colors = dotSwitchColors(), modifier = Modifier.padding(end = 12.dp))
             }
         }
-        item { DotTitle("Equalizer", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), size = 34.sp) }
-        if (!fx.available) item { Label("Equalizer isn't available on this device", Modifier.padding(20.dp), color = Dot.Red) }
+        item { DotTitle("Sound", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), size = 34.sp) }
+        if (!fx.available) item { Label("Audio effects aren't available on this device", Modifier.padding(20.dp), color = Dot.Red) }
 
+        item { Section("Effects") }
+        item {
+            Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                AudioFx.effects.chunked(2).forEach { pair ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        pair.forEach { e ->
+                            val selected = effect == e.name && (on || e.name == "Hi-Fi")
+                            EffectCard(e.name, e.note, selected, Modifier.weight(1f)) { applyEffect(e) }
+                        }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        item { Section("Equalizer") }
         item {
             LazyRow(contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(AudioFx.presets) { (name, curve) ->
                     Pill(name, {
-                        if (!on) s.eqEnabled.set(true)
-                        setLevels(AudioFx.presetLevels(curve, fx.bandCount, fx.range), name)
+                        tweak {
+                            s.eqLevels.set(AudioFx.presetLevels(curve, fx.bandCount, fx.range).joinToString(","))
+                            s.eqPreset.set(name)
+                        }
                     }, selected = on && preset == name)
                 }
-                item { Pill("Custom", { if (!on) s.eqEnabled.set(true); s.eqPreset.set("Custom") }, selected = on && preset == "Custom") }
             }
         }
-
         item {
             Row(
-                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 24.dp),
+                Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 20.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
                 levels.forEachIndexed { band, level ->
@@ -203,12 +246,13 @@ fun EqualizerScreen() {
                         VerticalDotSlider(
                             level / span,
                             { v ->
-                                val mb = ((v * span) / 50).roundToInt() * 50
-                                val next = levels.toMutableList().also { it[band] = mb.coerceIn(fx.range) }
-                                if (!on) s.eqEnabled.set(true)
-                                setLevels(next, "Custom")
+                                val mb = (((v * span) / 50).roundToInt() * 50).coerceIn(fx.range)
+                                tweak {
+                                    s.eqLevels.set(levels.toMutableList().also { it[band] = mb }.joinToString(","))
+                                    s.eqPreset.set("Custom")
+                                }
                             },
-                            Modifier.height(220.dp),
+                            Modifier.height(200.dp),
                             enabled = on,
                         )
                         Spacer(Modifier.height(8.dp))
@@ -218,28 +262,59 @@ fun EqualizerScreen() {
             }
         }
 
-        item { DottedDivider(Modifier.padding(horizontal = 20.dp)) }
+        item { Section("Enhancements") }
         item {
-            SliderRow("Bass boost", "${bass / 10}%", "Extra low end on top of the EQ", bass / 1000f, live = true) {
-                if (!on) s.eqEnabled.set(true)
-                s.bassBoost.set((it * 1000).roundToInt())
+            SliderRow("Bass boost", "${bass / 10}%", "Extra low end on top of the EQ", bass / 1000f) {
+                tweak { s.bassBoost.set((it * 1000).roundToInt()) }
             }
         }
         item {
-            SliderRow("Loudness", "+%.1f DB".format(loud / 100f), "Lifts quiet tracks", loud / 1000f, live = true) {
-                if (!on) s.eqEnabled.set(true)
-                s.loudness.set((it * 1000).roundToInt())
+            SliderRow(
+                "Panoramic", "${surround / 10}%",
+                if (fx.surroundAvailable) "3D surround, best on earphones" else "Not supported on this device",
+                surround / 1000f,
+            ) { tweak { s.virtualizer.set((it * 1000).roundToInt()) } }
+        }
+        item {
+            SliderRow("Loudness", "+%.1f DB".format(loud / 100f), "Lifts quiet tracks", loud / 1000f) {
+                tweak { s.loudness.set((it * 1000).roundToInt()) }
+            }
+        }
+        item {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
+                Text("Reverb", color = Dot.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text(if (fx.reverbAvailable) "Room ambience around the music" else "Not supported on this device", color = Dot.Muted, style = MonoSmall)
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(AudioFx.reverbs.size) { i ->
+                        Pill(AudioFx.reverbs[i].first, { tweak { s.reverb.set(i) } }, selected = on && reverb == i)
+                    }
+                }
             }
         }
         item {
             Row(Modifier.padding(20.dp)) {
-                Pill("Reset", {
-                    setLevels(List(fx.bandCount) { 0 }, "Flat")
-                    s.bassBoost.set(0)
-                    s.loudness.set(0)
-                })
+                Pill("Reset", { applyEffect(AudioFx.effects.first()) })
             }
         }
+    }
+}
+
+@Composable
+private fun EffectCard(name: String, note: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(if (selected) Dot.White else Dot.Surface2)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            DotTitle(name, Modifier.weight(1f), size = 18.sp, color = if (selected) Dot.Black else Dot.White)
+            Box(Modifier.size(8.dp).clip(CircleShape).background(if (selected) Dot.Red else Dot.Faint))
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(note, color = if (selected) Dot.Black.copy(alpha = 0.6f) else Dot.Muted, style = MonoSmall, maxLines = 1)
     }
 }
 
@@ -254,6 +329,18 @@ private fun dotSwitchColors() = SwitchDefaults.colors(
     uncheckedTrackColor = Dot.Surface2,
     uncheckedBorderColor = Dot.Line,
 )
+
+@Composable
+private fun PickerRow(title: String, subtitle: String, options: List<String>, selected: Int, onSelect: (Int) -> Unit) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
+        Text(title, color = Dot.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        Text(subtitle, color = Dot.Muted, style = MonoSmall)
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            options.forEachIndexed { i, label -> Pill(label, { onSelect(i) }, selected = selected == i) }
+        }
+    }
+}
 
 @Composable
 private fun Section(title: String) {
