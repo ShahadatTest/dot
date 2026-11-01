@@ -60,23 +60,6 @@ import com.dj.dot.data.Song
 import com.dj.dot.playback.GlyphMode
 import kotlin.math.roundToInt
 
-/** Six dots in a column, the Glyph strip in miniature; red while the lights are on. */
-@Composable
-fun GlyphIcon(on: Boolean, onClick: () -> Unit) {
-    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-    val color by androidx.compose.animation.animateColorAsState(if (on) Dot.Red else Dot.White, tween(220), label = "glyphIcon")
-    Box(
-        Modifier.size(44.dp).pressable(interaction).clip(CircleShape)
-            .clickable(interaction, androidx.compose.material3.ripple(), onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.size(width = 10.dp, height = 24.dp)) {
-            val step = size.height / 6
-            for (i in 0 until 6) drawCircle(color, 1.7.dp.toPx(), Offset(size.width / 2, step * i + step / 2))
-        }
-    }
-}
-
 /**
  * Everything visual in one place: cover style, visualizer and the Glyph strip. Every option is
  * a live preview of the song that's playing, so you pick by looking, not by reading.
