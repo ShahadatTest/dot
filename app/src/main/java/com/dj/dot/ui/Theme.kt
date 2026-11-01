@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalTextApi::class)
-
 package com.dj.dot.ui
 
 import androidx.compose.material3.MaterialTheme
@@ -7,11 +5,9 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.dj.dot.R
@@ -27,14 +23,8 @@ object Dot {
     val Red = Color(0xFFD71921)
 }
 
-/** Round dot-matrix display face. */
-val DotoFamily = FontFamily(
-    Font(
-        R.font.doto,
-        weight = FontWeight.Black,
-        variationSettings = FontVariation.Settings(FontVariation.weight(900), FontVariation.Setting("ROND", 100f)),
-    ),
-)
+/** Round dot-matrix display face, frozen at round dots and black weight to keep the file small. */
+val DotoFamily = FontFamily(Font(R.font.doto, FontWeight.Black))
 
 val MonoFamily = FontFamily(
     Font(R.font.space_mono, FontWeight.Normal),
