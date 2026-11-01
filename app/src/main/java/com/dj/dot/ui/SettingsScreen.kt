@@ -70,6 +70,7 @@ fun SettingsScreen() {
     val artStyle by s.artStyle.flow.collectAsStateWithLifecycle()
     val stripStyle by s.stripStyle.flow.collectAsStateWithLifecycle()
     val glyphMode by s.glyphMode.flow.collectAsStateWithLifecycle()
+    val shake by s.shakeForRandom.flow.collectAsStateWithLifecycle()
     val scanning by dot.library.scanning.collectAsStateWithLifecycle()
     val lib by dot.library.data.collectAsStateWithLifecycle()
 
@@ -115,6 +116,25 @@ fun SettingsScreen() {
         item { PickerRow("Cover style", "Or tap the album art to switch", ArtStyle.entries.map { it.label }, artStyle) { s.artStyle.set(it) } }
         if (dot.glyph.supported) item {
             PickerRow("Glyph lights", "The light strip on the back reacts to your music", GlyphMode.entries.map { it.label }, glyphMode) { s.glyphMode.set(it) }
+        }
+
+        item { Section("Gestures") }
+        item { SwitchRow("Shake for a random song", "Two firm shakes jump to something random", shake) { s.shakeForRandom.set(it) } }
+        item {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                listOf(
+                    "Double-tap the art" to "Like the song",
+                    "Swipe the art sideways" to "Next or previous",
+                    "Swipe up on the player" to "Open the queue",
+                    "Swipe down on the player" to "Close it",
+                    "Tap the art or visualizer" to "Switch styles",
+                ).forEach { (gesture, action) ->
+                    Row(Modifier.padding(vertical = 5.dp)) {
+                        Text(gesture, color = Dot.White, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                        Text(action, color = Dot.Muted, style = MonoSmall)
+                    }
+                }
+            }
         }
 
         item { Section("Library") }

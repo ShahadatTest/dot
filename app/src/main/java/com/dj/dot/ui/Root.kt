@@ -80,6 +80,7 @@ data class SongMenu(val song: Song, val playlistId: String? = null, val index: I
 class AppState {
     val stack = mutableStateListOf<Screen>(Screen.Home)
     var nowPlaying by mutableStateOf(false)
+    var party by mutableStateOf(false)
     var menu by mutableStateOf<SongMenu?>(null)
     var addToPlaylist by mutableStateOf<List<Song>?>(null)
 
@@ -174,9 +175,13 @@ private fun MainUi() {
                 NowPlayingScreen(onClose = { app.nowPlaying = false })
             }
 
+            if (app.party && state.current != null) PartyMode(onExit = { app.party = false })
+
             app.menu?.let { SongMenuSheet(it, onDismiss = { app.menu = null }) }
             app.addToPlaylist?.let { AddToPlaylistSheet(it, onDismiss = { app.addToPlaylist = null }) }
         }
+
+        ShakeToShuffle()
 
         BackHandler(enabled = app.nowPlaying || app.stack.size > 1) {
             if (app.nowPlaying) app.nowPlaying = false else app.pop()
