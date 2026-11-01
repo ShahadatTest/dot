@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -46,6 +47,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dj.dot.DotApp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+
+private data class SearchResults(
+    val songs: List<com.dj.dot.data.Song> = emptyList(),
+    val albums: List<com.dj.dot.data.Album> = emptyList(),
+    val artists: List<com.dj.dot.data.Artist> = emptyList(),
+)
 
 @Composable
 fun SearchScreen() {
@@ -58,12 +68,22 @@ fun SearchScreen() {
     LaunchedEffect(Unit) { focus.requestFocus() }
 
     val q = query.trim()
-    val songs = remember(q, lib) {
-        if (q.isEmpty()) emptyList()
-        else lib.songs.filter { it.title.contains(q, true) || it.artist.contains(q, true) || it.album.contains(q, true) }
+    // Typing waits a beat, then matches off the main thread so the keyboard never stutters.
+    val results by produceState(SearchResults(), q, lib) {
+        if (q.isEmpty()) { value = SearchResults(); return@produceState }
+        delay(120)
+        val needle = q.lowercase()
+        value = withContext(Dispatchers.Default) {
+            SearchResults(
+                songs = lib.songs.filter { it.title.lowercase().contains(needle) || it.artist.lowercase().contains(needle) || it.album.lowercase().contains(needle) },
+                albums = lib.albums.filter { it.title.lowercase().contains(needle) || it.artist.lowercase().contains(needle) },
+                artists = lib.artists.filter { it.name.lowercase().contains(needle) },
+            )
+        }
     }
-    val albums = remember(q, lib) { if (q.isEmpty()) emptyList() else lib.albums.filter { it.title.contains(q, true) || it.artist.contains(q, true) } }
-    val artists = remember(q, lib) { if (q.isEmpty()) emptyList() else lib.artists.filter { it.name.contains(q, true) } }
+    val songs = results.songs
+    val albums = results.albums
+    val artists = results.artists
 
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
