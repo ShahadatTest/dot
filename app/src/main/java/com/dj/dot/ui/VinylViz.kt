@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -117,7 +118,7 @@ fun VinylViz(song: Song, playing: Boolean, modifier: Modifier = Modifier, intera
             val image = grooves[0]?.takeIf { it.width == px } ?: paintGrooves(px, 3.5.dp.toPx(), 5.dp.toPx()).also { grooves[0] = it }
 
             drawCircle(Color(0xFF070707), r, c)
-            rotate(angle, c) { drawImage(image, Offset(c.x - px / 2f, c.y - px / 2f)) }
+            rotate(angle, c) { drawImage(image, Offset(c.x - px / 2f, c.y - px / 2f), colorFilter = ColorFilter.tint(Color(0xFF3A3A3A))) }
             // Light from a fixed window: two soft bands that stay put while the grooves turn.
             drawCircle(
                 Brush.sweepGradient(
@@ -154,9 +155,12 @@ fun VinylViz(song: Song, playing: Boolean, modifier: Modifier = Modifier, intera
     }
 }
 
-/** Concentric dotted grooves with a few gaps and blank bands between "tracks", painted once. */
+/**
+ * Concentric dotted grooves with a few gaps and blank bands between "tracks", painted once as a
+ * 1-byte alpha mask (a quarter of the memory of colour) and tinted when drawn.
+ */
 private fun paintGrooves(size: Int, ringGap: Float, dotGap: Float): ImageBitmap {
-    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+    val bmp = Bitmap.createBitmap(size, size, Bitmap.Config.ALPHA_8)
     val canvas = android.graphics.Canvas(bmp)
     val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
     val c = size / 2f
@@ -171,7 +175,7 @@ private fun paintGrooves(size: Int, ringGap: Float, dotGap: Float): ImageBitmap 
             val count = (2 * PI * radius / dotGap).toInt()
             val gapStart = rnd.nextInt(count)
             val gapLen = 2 + rnd.nextInt(6)
-            paint.color = if (ring % 5 == 0) 0xFF3A3A3A.toInt() else 0xFF262626.toInt()
+            paint.alpha = if (ring % 5 == 0) 255 else 170
             for (k in 0 until count) {
                 if ((k - gapStart + count) % count < gapLen) continue
                 val a = k * 2 * PI / count
