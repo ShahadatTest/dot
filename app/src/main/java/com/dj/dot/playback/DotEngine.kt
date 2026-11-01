@@ -269,6 +269,19 @@ class DotEngine(
 
     fun toggle() = if (wantPlay) pause() else play()
 
+    /** Jumps to a random song: another one in the queue, or a random library pick if the queue is short. */
+    fun playRandom() {
+        val index = _state.value.index
+        if (items.size > 1) {
+            var pick: Int
+            do { pick = items.indices.random() } while (pick == index)
+            jumpTo(pick)
+        } else {
+            val all = library.data.value.songs
+            if (all.isNotEmpty()) playSongs(all, all.indices.random())
+        }
+    }
+
     fun play() {
         if (items.isEmpty() || !requestFocus()) return
         val p = active
