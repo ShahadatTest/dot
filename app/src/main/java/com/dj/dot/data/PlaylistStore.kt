@@ -24,6 +24,16 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
     private val _playCounts = MutableStateFlow<Map<Long, Int>>(emptyMap())
     val playCounts: StateFlow<Map<Long, Int>> = _playCounts
 
+    /** Milliseconds actually listened, per song, per day (yyyy-MM-dd) and per hour of day. */
+    private val _listenMs = MutableStateFlow<Map<Long, Long>>(emptyMap())
+    val listenMs: StateFlow<Map<Long, Long>> = _listenMs
+    private val _dailyMs = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val dailyMs: StateFlow<Map<String, Long>> = _dailyMs
+    private val _hourMs = MutableStateFlow(List(24) { 0L })
+    val hourMs: StateFlow<List<Long>> = _hourMs
+    var trackingSince: Long = System.currentTimeMillis()
+        private set
+
     private var saveJob: Job? = null
 
     init {
@@ -39,6 +49,12 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
             _favourites.value = (0 until fav.length()).map { fav.getLong(it) }.toSet()
             val counts = root.optJSONObject("counts") ?: JSONObject()
             _playCounts.value = counts.keys().asSequence().associate { it.toLong() to counts.getInt(it) }
+            val listen = root.optJSONObject("listen") ?: JSONObject()
+            _listenMs.value = listen.keys().asSequence().associate { it.toLong() to listen.getLong(it) }
+            val daily = root.optJSONObject("daily") ?: JSONObject()
+            _dailyMs.value = daily.keys().asSequence().associate { it to daily.getLong(it) }
+            root.optJSONArray("hours")?.let { h -> _hourMs.value = List(24) { h.optLong(it) } }
+            trackingSince = root.optLong("since", trackingSince)
         }
     }
 
@@ -71,6 +87,17 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
         save()
     }
 
+    fun addListen(songId: Long, ms: Long) {
+        if (ms <= 0) return
+        val now = java.util.Calendar.getInstance()
+        val day = "%04d-%02d-%02d".format(now.get(java.util.Calendar.YEAR), now.get(java.util.Calendar.MONTH) + 1, now.get(java.util.Calendar.DAY_OF_MONTH))
+        val hour = now.get(java.util.Calendar.HOUR_OF_DAY)
+        _listenMs.value = _listenMs.value + (songId to (_listenMs.value[songId] ?: 0L) + ms)
+        _dailyMs.value = _dailyMs.value + (day to (_dailyMs.value[day] ?: 0L) + ms)
+        _hourMs.value = _hourMs.value.toMutableList().also { it[hour] += ms }
+        save()
+    }
+
     private inline fun edit(id: String, crossinline f: (Playlist) -> Playlist) {
         _playlists.value = _playlists.value.map { if (it.id == id) f(it) else it }
         save()
@@ -88,6 +115,10 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
                 })
                 .put("favourites", JSONArray(_favourites.value.toList()))
                 .put("counts", JSONObject().apply { _playCounts.value.forEach { (k, v) -> put(k.toString(), v) } })
+                .put("listen", JSONObject().apply { _listenMs.value.forEach { (k, v) -> put(k.toString(), v) } })
+                .put("daily", JSONObject().apply { _dailyMs.value.forEach { (k, v) -> put(k, v) } })
+                .put("hours", JSONArray(_hourMs.value))
+                .put("since", trackingSince)
                 .toString()
             launch(Dispatchers.IO) {
                 val tmp = File(file.parentFile, "library.json.tmp")
