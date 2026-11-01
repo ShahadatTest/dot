@@ -159,6 +159,8 @@ class DotEngine(
             while (isActive) {
                 delay(if (wantPlay) 100 else 500)
                 autoCrossfadeTick()
+                val d = duration()
+                progress = if (d > 0) (active.currentPosition.toFloat() / d).coerceIn(0f, 1f) else 0f
             }
         }
     }
@@ -222,6 +224,10 @@ class DotEngine(
     }
 
     // ---- Public controls ----------------------------------------------------------------
+
+    /** Playhead as a fraction, refreshed on the main thread for readers on other threads. */
+    @Volatile var progress = 0f
+        private set
 
     fun position(): Long = active.currentPosition
     fun duration(): Long = active.duration.takeIf { it > 0 } ?: (_state.value.current?.duration ?: 0L)
