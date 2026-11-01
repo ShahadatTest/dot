@@ -63,6 +63,11 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
     private val histT = LongArray(histSize)
     private val histV = arrayOfNulls<FloatArray>(histSize)
     private val histBeat = FloatArray(histSize)
+    private val histWave = arrayOfNulls<FloatArray>(histSize)
+    private var waveAmp = 1e-3f
+
+    /** Points per waveform snapshot. */
+    val wavePoints = 64
     private var head = 0
 
     @Synchronized
@@ -97,14 +102,20 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
 
     /** Levels (0..1) closest to [nanoTime], or null if nothing recent. */
     @Synchronized
-    fun levelsAt(nanoTime: Long): FloatArray? {
-        var best: FloatArray? = null
+    fun levelsAt(nanoTime: Long): FloatArray? = frameAt(nanoTime)?.let { histV[it] }
+
+    /** Waveform (-1..1) closest to [nanoTime], or null if nothing recent. */
+    @Synchronized
+    fun waveAt(nanoTime: Long): FloatArray? = frameAt(nanoTime)?.let { histWave[it] }
+
+    private fun frameAt(nanoTime: Long): Int? {
+        var best = -1
         var bestT = Long.MIN_VALUE
         for (i in 0 until histSize) {
             val t = histT[i]
-            if (t in (bestT + 1)..nanoTime) { bestT = t; best = histV[i] }
+            if (histV[i] != null && t in (bestT + 1)..nanoTime) { bestT = t; best = i }
         }
-        return if (best != null && nanoTime - bestT < 400_000_000L) best else null
+        return if (best >= 0 && nanoTime - bestT < 400_000_000L) best else null
     }
 
     /** Strongest beat (0..1) analysed in (fromNs, toNs], 0 if none. */
@@ -171,9 +182,23 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
         fluxHead = (fluxHead + 1) % fluxHist.size
         if (fluxCount < fluxHist.size) fluxCount++
 
+        // Waveform: average each 1/64th of the frame, normalised with a slow auto-gain.
+        val step = n / wavePoints
+        val wave = FloatArray(wavePoints)
+        var frameAmp = 0f
+        for (p in 0 until wavePoints) {
+            var acc = 0f
+            for (k in 0 until step) acc += ring[p * step + k]
+            wave[p] = acc / step
+            frameAmp = max(frameAmp, kotlin.math.abs(wave[p]))
+        }
+        waveAmp = max(frameAmp, max(waveAmp * 0.99f, 1e-3f))
+        for (p in 0 until wavePoints) wave[p] = (wave[p] / waveAmp).coerceIn(-1f, 1f)
+
         histT[head] = now
         histV[head] = levels
         histBeat[head] = beat
+        histWave[head] = wave
         head = (head + 1) % histSize
     }
 
