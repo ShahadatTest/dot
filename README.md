@@ -1,5 +1,10 @@
 # Dot
 
+[![Build](https://github.com/dhananjay6561/dot/actions/workflows/build.yml/badge.svg)](https://github.com/dhananjay6561/dot/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/dhananjay6561/dot?color=D71921&label=release)](https://github.com/dhananjay6561/dot/releases/latest)
+[![License](https://img.shields.io/github/license/dhananjay6561/dot?color=111111)](LICENSE)
+![Android 10+](https://img.shields.io/badge/Android-10%2B-111111)
+
 An offline music player for Android, designed around the Nothing OS look: pure black, dot-matrix type, a single red accent. Built for the Nothing Phone (4a), and it runs on any phone with Android 10 or newer. On Nothing phones it also drives the Glyph lights on the back.
 
 Dot plays the music that lives on your phone. No accounts, no streaming, no ads, no network calls.
@@ -10,6 +15,10 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
 | Installed | **3.6 MB** |
 
 For comparison, most streaming music apps install at well over 100 MB.
+
+## Download
+
+Grab **`Dot-1.0.0.apk`** from the [latest release](https://github.com/dhananjay6561/dot/releases/latest), open it on your phone and allow installing from that source. Android 10 or newer.
 
 <p align="center">
   <img src="docs/screenshots/home.webp" width="200" alt="Library">
@@ -429,9 +438,17 @@ Dot has no internet permission.
 - Format badge (codec, bit depth, sample rate)
 - Backup and restore of playlists and stats
 
+## Contributing
+
+Bug reports, ideas and pull requests are welcome. Read the [contributing guide](CONTRIBUTING.md) first; this project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Security problems go through the [security policy](SECURITY.md), not public issues.
+
 ## Credits
 
 - [Doto](https://fonts.google.com/specimen/Doto) and [Space Mono](https://fonts.google.com/specimen/Space+Mono), both under the SIL Open Font License
 - [AndroidX Media3](https://github.com/androidx/media)
 - [Nothing Glyph Developer Kit](https://github.com/Nothing-Developer-Programme/Glyph-Developer-Kit)
 - Library and queue ideas inspired by open-source players such as Auxio
+
+## License
+
+Dot is licensed under the [Apache License 2.0](LICENSE). Bundled fonts are under the SIL Open Font License; see [NOTICE](NOTICE) for third-party attributions.
