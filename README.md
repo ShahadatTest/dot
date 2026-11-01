@@ -31,9 +31,12 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
   - **Cover:** the album art; wide or tall covers are shown in full over a blurred fill
   - **Dot art:** the cover redrawn as a colour halftone that swells and ripples on every beat
   - **Halo:** a round cover with dot spokes following the spectrum and red rings rippling out on beats
+  - **Vinyl:** a spinning record at 33⅓ RPM with dotted grooves and a tonearm that tracks progress; grab it to scratch through the song
 - Three visualizer styles, switched by tapping the strip: **Grid**, **Mirror** and **Wave**
 - Real-time beat detection with a live BPM readout
 - A Visuals panel with live previews of every style, rendered from the song that's playing
+- **Party mode:** a full-screen landscape dot field with beat rings and the song in big dot type, screen kept on
+- **Bedside clock:** a big dot-matrix clock with what's playing; opens by itself on the charger after a minute untouched, dims, and shifts slightly so the OLED never burns in
 
 **Glyph lights** (Nothing Phone (4a))
 - The rear light strip reacts to the music:
@@ -55,6 +58,7 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
 **Library**
 - Songs, albums, artists, folders and playlists
 - Favourites, Recently added and Most played lists
+- Mood mixes: Dot learns each song's tempo on its first play and sorts it into **Chill**, **Groove** or **Hype**
 - Search across songs, albums and artists
 - Fast scroller with a letter bubble on long lists
 - Cleans download-site junk from tags for display, such as "(DjPunjab.CoM)", "- PagalNew" or "320 Kbps"; files are never modified
@@ -67,10 +71,16 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
 - A listener type (Early bird, Daydreamer, Evening soul, Night owl)
 - A summary card you can share as an image
 
+**Gestures**
+- Double-tap the art to like, with a heart burst
+- Swipe the art sideways for next or previous, swipe up for the queue, swipe down to close
+- Shake twice for a random song
+
 **Feel**
 - Nothing-style dot-matrix sliders that grow under your finger, with value bubbles and haptic ticks
 - Buttons and pills squish on press, icons scale and cross-fade when they change, colours fade between states
 - Liking a song pops the heart
+- Two-pane Now Playing in landscape; sheets open fully and scroll on short screens
 
 **System**
 - Keeps playing in the background and with the screen locked
@@ -185,7 +195,13 @@ Dot is built to stay light on battery and memory:
 - Listening stats are written once a minute and on pause, not continuously.
 - The library opens from a cached index and only rescans when MediaStore's change counter moves.
 - Album art comes from `ContentResolver.loadThumbnail` with an in-memory LRU cache, with no image library.
-- Release builds are shrunk and optimised with R8.
+- Only the parts that change every frame update: the seek bar, the lyric fill and the beat dot repaint without rebuilding the screen.
+- The current lyric line is found by binary search; queue edits change the list in place instead of rebuilding it.
+- Analyser frame lookups walk back from the newest frame and beat statistics are kept as running sums.
+- Search is debounced and matched off the main thread.
+- Album art is cached in three size buckets; vinyl grooves are a one-byte alpha mask.
+- Tempo is learned once per song from its first 25 seconds, then never measured again.
+- Release builds are shrunk and optimised with R8 (about 4 MB).
 
 ## Tech stack
 
@@ -228,6 +244,10 @@ app/src/main/java/com/dj/dot
     ├── NowPlaying.kt      player, queue, sleep sheet
     ├── Visualizers.kt     grid, mirror, wave, dot art, halo
     ├── VisualsSheet.kt    visuals and Glyph panel with live previews
+    ├── VinylViz.kt        spinning record with scratch to seek
+    ├── PartyMode.kt       full-screen landscape visualizer
+    ├── BedsideMode.kt     night-stand clock
+    ├── ShakeToShuffle.kt  shake gesture
     ├── LyricsView.kt      karaoke lyrics
     ├── SleepDial.kt       analog sleep timer
     ├── WrappedScreen.kt   listening stats
@@ -286,8 +306,6 @@ Dot has no internet permission.
 ## Roadmap
 
 - Dot's own audio engine: 10-band EQ, bass shelf, stereo widening, limiter and volume levelling
-- Party mode: a full-screen landscape visualizer
-- Gestures: double-tap to like, swipe up for the queue, shake for a random song
 - Beat-matched crossfade
 - Home-screen widget and Quick Settings tile
 - Format badge (codec, bit depth, sample rate)
