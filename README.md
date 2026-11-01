@@ -11,6 +11,13 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
 
 For comparison, most streaming music apps install at well over 100 MB.
 
+<p align="center">
+  <img src="docs/screenshots/home.webp" width="200" alt="Library">
+  <img src="docs/screenshots/dot-art.webp" width="200" alt="Dot art cover">
+  <img src="docs/screenshots/vinyl.webp" width="200" alt="Vinyl cover">
+  <img src="docs/screenshots/visuals.webp" width="200" alt="Visuals and Glyph panel">
+</p>
+
 ## Features
 
 **Playback**
@@ -93,6 +100,51 @@ For comparison, most streaming music apps install at well over 100 MB.
 - Keeps playing in the background and with the screen locked
 - Lock-screen and notification controls with album art
 - Headset and Bluetooth buttons, pauses for calls, ducks for navigation, pauses when headphones disconnect
+
+## Screenshots
+
+### Library
+
+<table>
+<tr><td align="center"><img src="docs/screenshots/home.webp" width="250" alt="Songs"><br><sub>Songs</sub></td><td align="center"><img src="docs/screenshots/albums.webp" width="250" alt="Albums"><br><sub>Albums</sub></td><td align="center"><img src="docs/screenshots/playlists.webp" width="250" alt="Playlists and mood mixes"><br><sub>Playlists and mood mixes</sub></td></tr>
+</table>
+
+### Cover styles
+
+<table>
+<tr><td align="center"><img src="docs/screenshots/cover.webp" width="200" alt="Cover"><br><sub>Cover</sub></td><td align="center"><img src="docs/screenshots/dot-art.webp" width="200" alt="Dot art"><br><sub>Dot art</sub></td><td align="center"><img src="docs/screenshots/halo.webp" width="200" alt="Halo"><br><sub>Halo</sub></td><td align="center"><img src="docs/screenshots/vinyl.webp" width="200" alt="Vinyl"><br><sub>Vinyl</sub></td></tr>
+</table>
+
+### Visualizers and Glyph
+
+<table>
+<tr><td align="center"><img src="docs/screenshots/mirror.webp" width="250" alt="Mirror visualizer"><br><sub>Mirror visualizer</sub></td><td align="center"><img src="docs/screenshots/wave.webp" width="250" alt="Wave visualizer"><br><sub>Wave visualizer</sub></td><td align="center"><img src="docs/screenshots/visuals.webp" width="250" alt="Visuals and Glyph panel"><br><sub>Visuals and Glyph panel</sub></td></tr>
+</table>
+
+### Sound
+
+<table>
+<tr><td align="center"><img src="docs/screenshots/sound.webp" width="250" alt="Sound modes"><br><sub>Sound modes</sub></td><td align="center"><img src="docs/screenshots/equalizer.webp" width="250" alt="Equalizer and enhancements"><br><sub>Equalizer and enhancements</sub></td></tr>
+</table>
+
+### Player tools
+
+<table>
+<tr><td align="center"><img src="docs/screenshots/queue.webp" width="250" alt="Queue"><br><sub>Queue</sub></td><td align="center"><img src="docs/screenshots/sleep-timer.webp" width="250" alt="Analog sleep timer"><br><sub>Analog sleep timer</sub></td><td align="center"><img src="docs/screenshots/search.webp" width="250" alt="Search"><br><sub>Search</sub></td></tr>
+</table>
+
+### Dot Wrapped and settings
+
+<table>
+<tr><td align="center"><img src="docs/screenshots/wrapped.webp" width="250" alt="Wrapped summary"><br><sub>Wrapped summary</sub></td><td align="center"><img src="docs/screenshots/wrapped-charts.webp" width="250" alt="Top songs and listening clock"><br><sub>Top songs and listening clock</sub></td><td align="center"><img src="docs/screenshots/settings.webp" width="250" alt="Settings"><br><sub>Settings</sub></td></tr>
+</table>
+
+### Party mode and bedside clock
+
+<table>
+<tr><td align="center"><img src="docs/screenshots/party.webp" width="560" alt="Party mode"><br><sub>Party mode</sub></td>
+<td align="center"><img src="docs/screenshots/bedside.webp" width="200" alt="Bedside clock"><br><sub>Bedside clock</sub></td></tr>
+</table>
 
 ## Architecture
 
