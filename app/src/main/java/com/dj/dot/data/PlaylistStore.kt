@@ -72,7 +72,10 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
 
     fun rename(id: String, name: String) = edit(id) { it.copy(name = name.trim().ifEmpty { it.name }) }
     fun delete(id: String) { _playlists.value = _playlists.value.filterNot { it.id == id }; save() }
-    fun add(id: String, songIds: List<Long>) = edit(id) { p -> p.copy(songIds = p.songIds + songIds.filterNot { it in p.songIds }) }
+    fun add(id: String, songIds: List<Long>) = edit(id) { p ->
+        val existing = p.songIds.toHashSet()
+        p.copy(songIds = p.songIds + songIds.filter { existing.add(it) })
+    }
     fun removeAt(id: String, index: Int) = edit(id) { p -> p.copy(songIds = p.songIds.filterIndexed { i, _ -> i != index }) }
     fun move(id: String, from: Int, to: Int) = edit(id) { p ->
         val l = p.songIds.toMutableList()
