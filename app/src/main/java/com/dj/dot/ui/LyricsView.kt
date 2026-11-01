@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -89,25 +90,27 @@ fun LyricsView(modifier: Modifier = Modifier) {
     }
 
     // Playhead read about 30 times a second while visible, so the karaoke fill stays smooth.
-    var position by remember { mutableLongStateOf(engine.position()) }
+    // Read only from derived state and draw lambdas, so ticking it never recomposes the list.
+    val position = remember { mutableLongStateOf(engine.position()) }
     LaunchedEffect(state.playing) {
         while (true) {
-            withFrameNanos { position = engine.position() }
+            withFrameNanos { position.longValue = engine.position() }
             delay(if (state.playing) 33 else 250) // ~30 fps is smooth enough for the fill
         }
     }
 
-    if (l.synced) SyncedLyrics(l, song.id, song.duration, position, modifier)
-    else PlainLyrics(l, position, engine.duration(), modifier)
+    if (l.synced) SyncedLyrics(l, song.id, song.duration, { position.longValue }, modifier)
+    else PlainLyrics(l, { position.longValue }, engine.duration(), modifier)
 }
 
 @Composable
-private fun SyncedLyrics(lyrics: Lyrics, songId: Long, songDuration: Long, position: Long, modifier: Modifier) {
+private fun SyncedLyrics(lyrics: Lyrics, songId: Long, songDuration: Long, position: () -> Long, modifier: Modifier) {
     val dot = DotApp.instance
     var offset by remember(songId) { mutableIntStateOf(dot.settings.lyricsOffset(songId)) }
     val items = remember(lyrics, songDuration) { buildItems(lyrics, songDuration) }
-    val shifted = position - offset
-    val active = items.indexOfLast { it.start <= shifted }
+    val shifted = { position() - offset }
+    // Recomposes only when the current line changes; found by binary search.
+    val active by remember(items, offset) { derivedStateOf { activeIndex(items, shifted()) } }
 
     val listState = rememberLazyListState()
     val dragged by listState.interactionSource.collectIsDraggedAsState()
@@ -157,7 +160,7 @@ private fun SyncedLyrics(lyrics: Lyrics, songId: Long, songDuration: Long, posit
 }
 
 @Composable
-private fun LyricLineRow(item: LyricItem.Line, distance: Int, position: Long, onTap: () -> Unit) {
+private fun LyricLineRow(item: LyricItem.Line, distance: Int, position: () -> Long, onTap: () -> Unit) {
     val isActive = distance == 0
     val targetAlpha = when {
         isActive -> 1f
@@ -172,7 +175,7 @@ private fun LyricLineRow(item: LyricItem.Line, distance: Int, position: Long, on
     // Most lines are sung faster than the gap to the next one, so cap the fill duration.
     val span = item.end - item.start
     val sung = min(span, max(1500L, item.text.length * 110L)).coerceAtLeast(1)
-    val progress = if (isActive) ((position - item.start).toFloat() / sung).coerceIn(0f, 1f) else if (distance < 0) 1f else 0f
+    val progress = { if (isActive) ((position() - item.start).toFloat() / sung).coerceIn(0f, 1f) else if (distance < 0) 1f else 0f }
 
     Box(
         Modifier
@@ -186,24 +189,26 @@ private fun LyricLineRow(item: LyricItem.Line, distance: Int, position: Long, on
                 transformOrigin = TransformOrigin(0f, 0.5f)
             },
     ) {
-        KaraokeText(item.text, if (isActive) progress else if (distance < 0) 1f else 0f)
+        KaraokeText(item.text, showFill = distance <= 0, progress = progress)
     }
 }
 
 /** Muted text with a white copy revealed line by line up to [progress]. */
 @Composable
-private fun KaraokeText(text: String, progress: Float) {
+private fun KaraokeText(text: String, showFill: Boolean, progress: () -> Float) {
     var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
     Box {
         Text(text, style = lineStyle, color = Dot.Muted.copy(alpha = 0.55f), onTextLayout = { layout = it })
-        if (progress > 0f) {
+        if (showFill) {
             Text(
                 text, style = lineStyle, color = Dot.White,
                 modifier = Modifier.drawWithContent {
                     val l = layout ?: return@drawWithContent
-                    if (progress >= 1f) { drawContent(); return@drawWithContent }
+                    val p = progress()
+                    if (p <= 0f) return@drawWithContent
+                    if (p >= 1f) { drawContent(); return@drawWithContent }
                     val widths = FloatArray(l.lineCount) { l.getLineRight(it) - l.getLineLeft(it) }
-                    var remaining = progress * widths.sum()
+                    var remaining = p * widths.sum()
                     for (i in 0 until l.lineCount) {
                         if (remaining <= 0f) break
                         val left = l.getLineLeft(i)
@@ -219,12 +224,12 @@ private fun KaraokeText(text: String, progress: Float) {
 
 /** Three dots that fill across an instrumental break and breathe while waiting. */
 @Composable
-private fun BreakRow(item: LyricItem.Break, active: Boolean, position: Long) {
+private fun BreakRow(item: LyricItem.Break, active: Boolean, position: () -> Long) {
     AnimatedVisibility(active, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-        val progress = ((position - item.start).toFloat() / (item.end - item.start).coerceAtLeast(1)).coerceIn(0f, 1f)
-        val breathe = 1f + 0.12f * sin(position / 260f)
         Canvas(Modifier.padding(horizontal = 6.dp, vertical = 18.dp).width(84.dp).height(20.dp)) {
-            val r = 6.dp.toPx() * breathe
+            val now = position()
+            val progress = ((now - item.start).toFloat() / (item.end - item.start).coerceAtLeast(1)).coerceIn(0f, 1f)
+            val r = 6.dp.toPx() * (1f + 0.12f * sin(now / 260f))
             for (k in 0 until 3) {
                 val local = ((progress * 3f) - k).coerceIn(0f, 1f)
                 val cx = r + k * (size.width - 2 * r) / 2
@@ -237,7 +242,7 @@ private fun BreakRow(item: LyricItem.Break, active: Boolean, position: Long) {
 }
 
 @Composable
-private fun PlainLyrics(lyrics: Lyrics, position: Long, duration: Long, modifier: Modifier) {
+private fun PlainLyrics(lyrics: Lyrics, position: () -> Long, duration: Long, modifier: Modifier) {
     val listState = rememberLazyListState()
     val dragged by listState.interactionSource.collectIsDraggedAsState()
     var autoScroll by remember { mutableStateOf(true) }
@@ -245,8 +250,10 @@ private fun PlainLyrics(lyrics: Lyrics, position: Long, duration: Long, modifier
         if (dragged) autoScroll = false else if (!autoScroll) { delay(5000); autoScroll = true }
     }
     // No timestamps: drift through the text in step with the song.
-    val target = if (duration > 0) ((position.toFloat() / duration) * lyrics.lines.size).toInt() - 2 else 0
-    LaunchedEffect(target / 2, autoScroll) {
+    val target by remember(lyrics, duration) {
+        derivedStateOf { if (duration > 0) (((position().toFloat() / duration) * lyrics.lines.size).toInt() - 2) / 2 * 2 else 0 }
+    }
+    LaunchedEffect(target, autoScroll) {
         if (autoScroll) listState.animateScrollToItem(target.coerceIn(0, (lyrics.lines.size - 1).coerceAtLeast(0)))
     }
     Column(modifier.fillMaxSize()) {
@@ -279,6 +286,18 @@ private fun Modifier.edgeFade(): Modifier = this
             blendMode = BlendMode.DstIn,
         )
     }
+
+/** Index of the last item that has started by [t], or -1. O(log n). */
+private fun activeIndex(items: List<LyricItem>, t: Long): Int {
+    var lo = 0
+    var hi = items.lastIndex
+    var ans = -1
+    while (lo <= hi) {
+        val mid = (lo + hi) ushr 1
+        if (items[mid].start <= t) { ans = mid; lo = mid + 1 } else hi = mid - 1
+    }
+    return ans
+}
 
 private fun buildItems(lyrics: Lyrics, songDuration: Long): List<LyricItem> {
     val lines = lyrics.lines
