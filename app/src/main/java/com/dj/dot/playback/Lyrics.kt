@@ -1,7 +1,8 @@
 package com.dj.dot.playback
 
-import android.os.Build
-import android.os.Environment
+import android.content.Context
+import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.annotation.OptIn
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
@@ -9,7 +10,6 @@ import androidx.media3.extractor.metadata.id3.BinaryFrame
 import androidx.media3.extractor.metadata.id3.TextInformationFrame
 import androidx.media3.extractor.metadata.vorbis.VorbisComment
 import com.dj.dot.data.Song
-import java.io.File
 
 data class LyricLine(val timeMs: Long, val text: String)
 
@@ -59,30 +59,65 @@ object LyricsParser {
         }
     }
 
-    /** "All files access" only exists from Android 11; Android 10 has nothing to grant. */
-    fun hasFileAccess() = Build.VERSION.SDK_INT >= 30 && Environment.isExternalStorageManager()
+    /** Lyrics files are read only from folders the user picked in Settings. */
+    fun hasFolders(folders: List<Uri>) = folders.isNotEmpty()
 
     /**
-     * A `.lrc` next to the audio file. Tries the exact file name first, then any `.lrc` in the
-     * folder whose name matches the song's title or file name once site tags in brackets and
-     * punctuation are stripped. Needs "All files access" since lrc files aren't media.
+     * A `.lrc` next to the audio file, read through a folder the user granted (no all-files access).
+     * Tries the exact file name first, then any `.lrc` in the folder whose name matches the song's
+     * title or file name once site tags in brackets and punctuation are stripped.
      */
-    fun sidecar(song: Song): Lyrics? {
-        if (!hasFileAccess() || song.path.isEmpty()) return null
-        val audio = File(song.path)
-        val dir = audio.parentFile ?: return null
-        val base = audio.nameWithoutExtension
-        val file = listOf("$base.lrc", "$base.LRC").map { File(dir, it) }.firstOrNull { it.canRead() }
-            ?: matchByName(dir, listOf(song.title, base))
+    fun sidecar(context: Context, song: Song, folders: List<Uri>): Lyrics? {
+        if (folders.isEmpty() || song.path.isEmpty()) return null
+        val dirId = documentIdOf(song.path.substringBeforeLast('/', "")) ?: return null
+        val tree = folders.firstOrNull { covers(it, dirId) } ?: return null
+        val resolver = context.contentResolver
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, dirId)
+        val lrcs = ArrayList<Pair<String, String>>() // display name to document id
+        runCatching {
+            resolver.query(
+                children,
+                arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_DOCUMENT_ID),
+                null, null, null,
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val name = c.getString(0) ?: continue
+                    if (name.endsWith(".lrc", ignoreCase = true)) lrcs += name to c.getString(1)
+                }
+            }
+        }
+        val base = song.path.substringAfterLast('/').substringBeforeLast('.')
+        val docId = lrcs.firstOrNull { it.first.equals("$base.lrc", ignoreCase = true) }?.second
+            ?: matchByName(lrcs, listOf(song.title, base))
             ?: return null
-        return runCatching { parse(file.readText()) }.getOrNull()
+        return runCatching {
+            resolver.openInputStream(DocumentsContract.buildDocumentUriUsingTree(tree, docId))?.use { input ->
+                parse(input.bufferedReader().readText())
+            }
+        }.getOrNull()
     }
 
-    private fun matchByName(dir: File, names: List<String>): File? {
+    /**
+     * The storage provider's id for a folder path: "/storage/emulated/0/Music/A" is "primary:Music/A",
+     * and "/storage/1A2B-3C4D/Music" on an SD card is "1A2B-3C4D:Music".
+     */
+    internal fun documentIdOf(dir: String): String? {
+        val primary = Regex("""^/storage/emulated/\d+/?(.*)$""").find(dir)
+        if (primary != null) return "primary:" + primary.groupValues[1].trimEnd('/')
+        val volume = Regex("""^/storage/([^/]+)/?(.*)$""").find(dir) ?: return null
+        return volume.groupValues[1] + ":" + volume.groupValues[2].trimEnd('/')
+    }
+
+    /** True if the granted folder [tree] is [dirId] or one of its parents. */
+    private fun covers(tree: Uri, dirId: String): Boolean {
+        val root = runCatching { DocumentsContract.getTreeDocumentId(tree) }.getOrNull() ?: return false
+        return dirId == root || dirId.startsWith(if (root.endsWith(":")) root else "$root/")
+    }
+
+    private fun matchByName(lrcs: List<Pair<String, String>>, names: List<String>): String? {
         val keys = names.map(::normalize).filter { it.length >= 3 }.toSet()
         if (keys.isEmpty()) return null
-        val candidates = dir.listFiles { f -> f.isFile && f.extension.equals("lrc", true) }.orEmpty()
-            .map { it to normalize(it.nameWithoutExtension) }
+        val candidates = lrcs.map { (name, id) -> id to normalize(name.substringBeforeLast('.')) }
         return candidates.firstOrNull { it.second in keys }?.first
             ?: candidates.firstOrNull { (_, n) -> keys.any { k -> k.length >= 6 && n.length >= 6 && (n.contains(k) || k.contains(n)) } }?.first
     }

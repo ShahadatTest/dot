@@ -682,6 +682,12 @@ class DotEngine(
         }
     }
 
+    /** Looks for lyrics again, e.g. after the lyrics folders change. */
+    fun reloadLyrics() {
+        lyricsFor = -1L
+        refreshLyrics(active.currentTracks)
+    }
+
     private fun refreshLyrics(tracks: Tracks?) {
         val song = _state.value.queue.getOrNull(active.currentMediaItemIndex)
             ?.takeIf { it.id.toString() == active.currentMediaItem?.mediaId }
@@ -690,7 +696,7 @@ class DotEngine(
             lyricsFor = song.id
             _lyrics.value = null
             scope.launch {
-                val fromFile = withContext(Dispatchers.IO) { LyricsParser.sidecar(song) }
+                val fromFile = withContext(Dispatchers.IO) { LyricsParser.sidecar(app, song, settings.lyricsFolderUris()) }
                 if (fromFile != null && lyricsFor == song.id) _lyrics.value = fromFile
             }
         }

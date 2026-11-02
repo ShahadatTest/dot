@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.clickable
@@ -49,7 +48,6 @@ import com.dj.dot.DotApp
 import com.dj.dot.data.PlaylistStore
 import com.dj.dot.playback.AudioFx
 import com.dj.dot.playback.GlyphMode
-import com.dj.dot.playback.LyricsParser
 import com.dj.dot.playback.Vibe
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -81,10 +79,19 @@ fun SettingsScreen() {
     val scanning by dot.library.scanning.collectAsStateWithLifecycle()
     val lib by dot.library.data.collectAsStateWithLifecycle()
 
-    var fileAccess by remember { mutableStateOf(LyricsParser.hasFileAccess()) }
+    val lyricsFolders by s.lyricsFolders.flow.collectAsStateWithLifecycle()
+    val pickLyricsFolder = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        // Keep read access across restarts; nothing outside this folder becomes readable.
+        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        val all = (s.lyricsFolderUris().map { it.toString() } + uri.toString()).distinct()
+        s.lyricsFolders.set(all.joinToString("\n"))
+        dot.engine.reloadLyrics()
+    }
     var unrestricted by remember { mutableStateOf(isUnrestricted(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        fileAccess = LyricsParser.hasFileAccess()
         unrestricted = isUnrestricted(context)
     }
 
@@ -174,13 +181,19 @@ fun SettingsScreen() {
         }
         item { BackupRows() }
         item { NavRow("Rescan library", if (scanning) "Scanning…" else "${lib.songs.size} songs") { dot.library.rescan() } }
-        if (Build.VERSION.SDK_INT >= 30) item {
-            NavRow("Lyrics file access", if (fileAccess) "Allowed" else "Needed for .lrc files") {
-                runCatching {
-                    context.startActivity(
-                        Intent(AndroidSettings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}")),
-                    )
+        item {
+            val count = lyricsFolders.lines().count { it.isNotBlank() }
+            NavRow("Lyrics folders", if (count == 0) "Pick the folders with your .lrc files" else "$count folder${if (count == 1) "" else "s"} · tap to add another") {
+                runCatching { pickLyricsFolder.launch(null) }
+            }
+        }
+        if (lyricsFolders.isNotBlank()) item {
+            NavRow("Forget lyrics folders", "Dot stops reading .lrc files from them") {
+                s.lyricsFolderUris().forEach { uri ->
+                    runCatching { context.contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
                 }
+                s.lyricsFolders.set("")
+                dot.engine.reloadLyrics()
             }
         }
 

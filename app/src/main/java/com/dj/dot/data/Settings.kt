@@ -65,6 +65,10 @@ class Settings(context: Context) {
     val glyphBrightness = int("glyph_brightness", 100)
     val glyphSensitivity = int("glyph_sensitivity", 100)
     val glyphBeatFlash = bool("glyph_beat_flash", true)
+    /** Folders the user granted for reading .lrc files, one tree uri per line. */
+    val lyricsFolders = string("lyrics_folders", "")
+    fun lyricsFolderUris(): List<android.net.Uri> =
+        lyricsFolders.value.lines().filter { it.isNotBlank() }.map(android.net.Uri::parse)
 
     /** Per-song lyrics timing shift in ms; positive shows lines later. */
     fun lyricsOffset(songId: Long): Int = sp.getInt("lrc_off_$songId", 0)
