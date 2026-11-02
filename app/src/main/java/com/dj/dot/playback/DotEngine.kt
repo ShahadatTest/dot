@@ -6,13 +6,13 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.audiofx.AudioEffect
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.AudioAttributes
-import androidx.media3.common.AuxEffectInfo
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
@@ -110,7 +110,7 @@ class DotEngine(
     val spectrum = Spectrum()
     private val tracker = ListeningTracker(store, spectrum)
     private val audioSessionId = Util.generateAudioSessionIdV21(app)
-    val fx = AudioFx(audioSessionId)
+    val fx = AudioFx()
 
     /**
      * Only the audio containers a local music library uses. Registering these explicitly instead
@@ -174,14 +174,25 @@ class DotEngine(
         ContextCompat.registerReceiver(
             app, noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_EXPORTED,
         )
-        players.forEach { it.playbackParameters = PlaybackParameters(settings.speed.value) }
+        players.forEach { it.playbackParameters = playbackParams() }
         applyVolumes()
+        // Announce the session like other music apps do, so system sound features can attach.
+        app.sendBroadcast(
+            Intent(AudioEffect.ACTION_OPEN_AUDIO_EFFECT_CONTROL_SESSION)
+                .putExtra(AudioEffect.EXTRA_AUDIO_SESSION, audioSessionId)
+                .putExtra(AudioEffect.EXTRA_PACKAGE_NAME, app.packageName)
+                .putExtra(AudioEffect.EXTRA_CONTENT_TYPE, AudioEffect.CONTENT_TYPE_MUSIC),
+        )
         scope.launch { restore(library.data.first { it.ready }) }
         scope.launch {
             merge(
                 settings.eqEnabled.flow, settings.eqLevels.flow, settings.bassBoost.flow,
                 settings.loudness.flow, settings.virtualizer.flow, settings.reverb.flow,
-            ).collect { applyFx() }
+                settings.levelling.flow, settings.vibe.flow,
+            ).collect {
+                applyFx()
+                players.forEach { it.playbackParameters = playbackParams() }
+            }
         }
         scope.launch {
             // Sleeps completely while paused and only ticks while music is playing.
@@ -207,7 +218,8 @@ class DotEngine(
                 enableFloatOutput: Boolean,
                 enableAudioTrackPlaybackParams: Boolean,
             ): AudioSink = DefaultAudioSink.Builder(context)
-                .setAudioProcessors(arrayOf<AudioProcessor>(TeeAudioProcessor(spectrum)))
+                // Dot's sound chain first, then the tap, so visuals see what you hear.
+                .setAudioProcessors(arrayOf<AudioProcessor>(DotDsp(fx.params), TeeAudioProcessor(spectrum)))
                 .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                 .build()
         }
@@ -439,7 +451,7 @@ class DotEngine(
 
     fun setSpeed(speed: Float) {
         settings.speed.set(speed)
-        players.forEach { it.playbackParameters = PlaybackParameters(speed) }
+        players.forEach { it.playbackParameters = playbackParams() }
     }
 
     fun setSleepTimer(minutes: Int) {
@@ -489,7 +501,7 @@ class DotEngine(
         inc.pauseAtEndOfMediaItems = false
         inc.setMediaItems(items, index, 0)
         inc.repeatMode = _state.value.repeat
-        inc.playbackParameters = PlaybackParameters(settings.speed.value)
+        inc.playbackParameters = playbackParams()
         inc.prepare()
         inc.playWhenReady = true
         // The outgoing track must not roll into the next item on its own.
@@ -649,14 +661,25 @@ class DotEngine(
         fx.apply(
             settings.eqEnabled.value, parseLevels(settings.eqLevels.value), settings.bassBoost.value,
             settings.loudness.value, settings.virtualizer.value, settings.reverb.value,
+            settings.levelling.value, vibe(),
         )
-        val send = fx.reverbSendId
-        val aux = if (send != null) AuxEffectInfo(send, 1f) else AuxEffectInfo(AuxEffectInfo.NO_AUX_EFFECT_ID, 0f)
-        players.forEach { it.setAuxEffectInfo(aux) }
+    }
+
+    private fun vibe() = Vibe.entries.getOrElse(settings.vibe.value) { Vibe.Off }
+
+    /** Slowed and Nightcore change speed and pitch together, like a record at the wrong RPM. */
+    private fun playbackParams(): PlaybackParameters = when (vibe()) {
+        Vibe.Slowed -> PlaybackParameters(0.82f, 0.82f)
+        Vibe.Nightcore -> PlaybackParameters(1.22f, 1.22f)
+        else -> PlaybackParameters(settings.speed.value)
     }
 
     fun parseLevels(raw: String): List<Int> {
         val parsed = raw.split(',').mapNotNull { it.trim().toIntOrNull() }
+        // Older saves had five bands; stretch them across the ten.
+        if (parsed.size in 2 until fx.bandCount) {
+            return AudioFx.presetLevels(FloatArray(parsed.size) { parsed[it] / 100f }, fx.bandCount, fx.range)
+        }
         return List(fx.bandCount) { parsed.getOrElse(it) { 0 } }
     }
 
