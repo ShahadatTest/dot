@@ -4,3 +4,8 @@ local.properties
 .idea/
 *.iml
 app/libs/
+
+# Release signing
+keystore.properties
+*.jks
+*.keystore

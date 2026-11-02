@@ -1,6 +1,7 @@
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
+import java.util.Properties
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -8,6 +9,13 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+// Release signing comes from a git-ignored keystore.properties at the project root, or from the
+// DOT_KEYSTORE* environment variables in CI. Without either, release builds come out unsigned.
+val keystoreProps = Properties().apply {
+    rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use(::load)
+}
+fun signingValue(key: String, env: String): String? = keystoreProps.getProperty(key) ?: System.getenv(env)
 
 android {
     namespace = "com.dj.dot"
@@ -29,12 +37,23 @@ android {
             .getOrElse("test")
     }
 
+    signingConfigs {
+        create("release") {
+            signingValue("storeFile", "DOT_KEYSTORE")?.let { path ->
+                storeFile = rootProject.file(path)
+                storePassword = signingValue("storePassword", "DOT_KEYSTORE_PASSWORD")
+                keyAlias = signingValue("keyAlias", "DOT_KEY_ALIAS")
+                keyPassword = signingValue("keyPassword", "DOT_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release").takeIf { it.storeFile != null }
         }
     }
     compileOptions {

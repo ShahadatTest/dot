@@ -19,7 +19,28 @@ echo "sdk.dir=/path/to/android/sdk" > local.properties
 ./gradlew assembleDebug
 ```
 
-The first build downloads the Nothing Glyph SDK into `app/libs/`. Install on a connected phone with `./gradlew installDebug`.
+The first build downloads the Nothing Glyph SDK into `app/libs/` from a pinned commit and checks its SHA-256. Install on a connected phone with `./gradlew installDebug`.
+
+### Release builds
+
+Release builds are never signed with the debug key. Without signing details, `./gradlew assembleRelease` produces an unsigned APK. To sign, create a keystore once and keep it (and its passwords) somewhere safe and out of git; every future update must be signed with the same key.
+
+```bash
+keytool -genkeypair -v -keystore dot-release.jks -alias dot -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Then either add a `keystore.properties` at the project root (git-ignored):
+
+```properties
+storeFile=dot-release.jks
+storePassword=...
+keyAlias=dot
+keyPassword=...
+```
+
+or set `DOT_KEYSTORE`, `DOT_KEYSTORE_PASSWORD`, `DOT_KEY_ALIAS` and `DOT_KEY_PASSWORD` (this is what CI uses).
+
+The Glyph lights need Nothing's API key in release builds: pass `-PnothingApiKey=...`, add `nothingApiKey=...` to `~/.gradle/gradle.properties`, or set `NOTHING_API_KEY`. Without it the SDK's `test` key is used, which only works with Glyph debug mode turned on.
 
 ## Guidelines
 
