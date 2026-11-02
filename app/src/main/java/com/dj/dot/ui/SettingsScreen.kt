@@ -50,6 +50,7 @@ import com.dj.dot.playback.AudioFx
 import com.dj.dot.playback.GlyphMode
 import com.dj.dot.playback.Vibe
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen() {
@@ -164,6 +165,7 @@ fun SettingsScreen() {
                 dot.library.rescan()
             }
         }
+        item { BackupRows() }
         item { NavRow("Rescan library", if (scanning) "Scanning…" else "${lib.songs.size} songs") { dot.library.rescan() } }
         item {
             NavRow("Lyrics file access", if (fileAccess) "Allowed" else "Needed for .lrc files") {
@@ -409,6 +411,60 @@ private fun EffectCard(name: String, note: String, selected: Boolean, modifier: 
         }
         Spacer(Modifier.height(4.dp))
         Text(note, color = if (selected) Dot.Black.copy(alpha = 0.6f) else Dot.Muted, style = MonoSmall, maxLines = 1)
+    }
+}
+
+/** Back up to, and restore from, a file the user picks. */
+@Composable
+private fun BackupRows() {
+    val dot = DotApp.instance
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var pendingRestore by remember { mutableStateOf<android.net.Uri?>(null) }
+    fun toast(msg: String) = android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+
+    val save = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val json = dot.store.exportJson(dot.library.data.value)
+            val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(json.toByteArray()) } }.isSuccess
+            }
+            toast(if (ok) "Backed up" else "Couldn't save the backup")
+        }
+    }
+    val open = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> pendingRestore = uri }
+
+    NavRow("Back up", "Playlists, favourites and stats to a file") {
+        save.launch("dot-backup-${java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())}.json")
+    }
+    NavRow("Restore", "Replace them with a backup") { open.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) }
+
+    pendingRestore?.let { uri ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pendingRestore = null },
+            containerColor = Dot.Surface2,
+            title = { DotTitle("Restore?", size = 22.sp) },
+            text = { Text("Your current playlists, favourites and stats will be replaced by the backup.", color = Dot.Muted, style = MonoSmall) },
+            confirmButton = {
+                Pill("Restore", {
+                    pendingRestore = null
+                    scope.launch {
+                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            runCatching { context.contentResolver.openInputStream(uri)!!.bufferedReader().use { it.readText() } }
+                        }
+                        result.mapCatching { dot.store.restoreJson(it, dot.library.data.value) }
+                            .onSuccess { toast("Restored · $it songs matched") }
+                            .onFailure { toast("That file isn't a Dot backup") }
+                    }
+                }, accent = true)
+            },
+            dismissButton = { Pill("Cancel", { pendingRestore = null }) },
+        )
     }
 }
 
