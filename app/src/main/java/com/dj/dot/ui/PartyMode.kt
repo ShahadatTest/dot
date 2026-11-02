@@ -139,47 +139,111 @@ fun PartyMode(onExit: () -> Unit) {
     }
 }
 
-/** The mirrored dot field: bass in the middle, highs to the edges, peaks red, rings on beats. */
+/** One spark from a beat burst. */
+private class Spark(var x: Float, var y: Float, val vx: Float, val vy: Float, var life: Float, val red: Boolean)
+
+/**
+ * The party scene, all dots: a red sun on the horizon that swells with the bass, a skyline of
+ * spectrum columns rising from it, a perspective floor rushing towards you at the song's tempo,
+ * and sparks bursting from the horizon on every beat.
+ */
 @Composable
 private fun PartyField(viz: VizState, modifier: Modifier) {
-    Canvas(modifier) {
-        viz.frame
-        val cols = viz.bands * 2 - 1
-        val cw = size.width / cols
-        val rows = ((size.height / cw).roundToInt() or 1).coerceAtLeast(9)
-        val rh = size.height / rows
-        val mid = rows / 2
-        val swell = 1f + 0.18f * viz.pulse
-        val r = min(cw, rh) * 0.28f
-        val center = Offset(size.width / 2, size.height / 2)
+    val sparks = remember { ArrayList<Spark>() }
+    val clock = remember { LongArray(2) } // last frame time, last burst start
+    val travel = remember { FloatArray(1) } // floor scroll position in rows
 
-        // Beat rings first, so the dots sit on top of them.
+    Canvas(modifier) {
         val now = viz.frame
-        val maxR = size.width * 0.6f
-        for ((start, strength) in viz.ripples) {
-            val t = ((now - start).toFloat() / 1_200_000_000L).coerceIn(0f, 1f)
-            val radius = maxR * t
-            val dots = 90
-            for (k in 0 until dots) {
-                val a = k * 2f * PI.toFloat() / dots
-                drawCircle(Dot.Red.copy(alpha = (1f - t) * strength * 0.7f), r * 0.8f, Offset(center.x + cos(a) * radius, center.y + sin(a) * radius * 0.55f))
+        val dt = if (clock[0] == 0L) 0f else ((now - clock[0]) / 1e9f).coerceIn(0f, 0.05f)
+        clock[0] = now
+        val w = size.width
+        val h = size.height
+        val cx = w / 2
+        val horizon = h * 0.5f
+        val bands = viz.bands
+        val bass = (viz.levels[0] + viz.levels[1] + viz.levels[2]) / 3f
+
+        // Sun: a ring of red dots behind the skyline, breathing with the bass.
+        val sunR = h * (0.24f + 0.05f * bass + 0.03f * viz.pulse)
+        val sunDots = 96
+        for (k in 0 until sunDots) {
+            val a = PI.toFloat() + k * PI.toFloat() / (sunDots - 1) // top half only
+            val p = Offset(cx + cos(a) * sunR, horizon + sin(a) * sunR)
+            drawCircle(Dot.Red.copy(alpha = 0.35f + 0.5f * bass), h * 0.006f, p)
+        }
+        for (ring in 1..4) {
+            val r = sunR * (1f - ring * 0.2f)
+            val n = (sunDots * (1f - ring * 0.2f)).toInt()
+            for (k in 0 until n) {
+                val a = PI.toFloat() + k * PI.toFloat() / (n - 1)
+                drawCircle(Dot.Red.copy(alpha = (0.12f + 0.25f * bass) * (1f - ring * 0.18f)), h * 0.004f, Offset(cx + cos(a) * r, horizon + sin(a) * r))
             }
         }
 
+        // Skyline: mirrored spectrum columns standing on the horizon.
+        val cols = bands * 2 - 1
+        val colStep = w * 0.8f / cols
+        val left = cx - colStep * (cols - 1) / 2
+        val rowStep = colStep * 0.75f
+        val maxRows = ((horizon - h * 0.08f) / rowStep).toInt().coerceAtLeast(6)
+        val dotR = colStep * 0.24f
         for (c in 0 until cols) {
-            val band = abs(c - cols / 2).coerceIn(0, viz.bands - 1)
-            val reach = (viz.levels[band] * (mid + 0.5f)).roundToInt()
-            for (row in 0 until rows) {
-                val d = abs(row - mid)
-                val on = d <= reach
+            val band = abs(c - cols / 2).coerceIn(0, bands - 1)
+            val lit = (viz.levels[band] * maxRows).roundToInt()
+            for (row in 0 until maxRows) {
+                val on = row < lit
                 val color = when {
-                    d == 0 && viz.pulse > 0.3f -> Dot.Red
-                    on && d == reach && reach >= mid - 1 -> Dot.Red
+                    on && row == lit - 1 && lit > maxRows * 0.7f -> Dot.Red
                     on -> Dot.White
-                    else -> Dot.Faint.copy(alpha = 0.6f + 0.4f * viz.pulse)
+                    else -> Dot.Faint.copy(alpha = 0.35f)
                 }
-                drawCircle(color, if (on) r * swell else r * 0.7f, Offset(c * cw + cw / 2, row * rh + rh / 2))
+                drawCircle(color, if (on) dotR * (1f + 0.15f * viz.pulse) else dotR * 0.6f, Offset(left + c * colStep, horizon - rowStep * (row + 0.6f)))
             }
+        }
+
+        // Floor: rows that rush towards you, one row per beat.
+        val rowsPerSecond = if (viz.bpm > 0) viz.bpm / 60f else 1.6f
+        travel[0] = (travel[0] + dt * rowsPerSecond * (0.35f + bass)) % 1f
+        val floorRows = 18
+        val floorCols = 31
+        val spread = w * 1.1f / floorCols
+        for (i in 0 until floorRows) {
+            val d = ((i + 1 - travel[0]) / floorRows).coerceIn(0.001f, 1f) // 0 = at your feet, 1 = horizon
+            val z = 1f / (1f - d * 0.94f)
+            val y = horizon + (h * 1.02f - horizon) / z
+            val near = 1f - d
+            for (c in 0 until floorCols) {
+                val offset = c - floorCols / 2
+                val band = (abs(offset) * (bands - 1) / (floorCols / 2)).coerceIn(0, bands - 1)
+                val level = viz.levels[band]
+                val x = cx + offset * spread / z
+                if (x < -spread || x > w + spread) continue
+                val alpha = (near * near * (0.25f + 0.75f * level)).coerceIn(0.04f, 1f)
+                val color = if (d < 0.12f && viz.pulse > 0.3f) Dot.Red else Dot.White
+                drawCircle(color.copy(alpha = alpha), (h * 0.012f) / z * 1.6f, Offset(x, y))
+            }
+        }
+
+        // Sparks: a burst from the horizon on every new beat.
+        val latest = viz.ripples.lastOrNull()
+        if (latest != null && latest.first != clock[1]) {
+            clock[1] = latest.first
+            val count = (20 + 30 * latest.second).toInt()
+            repeat(count) { k ->
+                val a = (PI + Math.random() * PI).toFloat() // upward fan
+                val speed = h * (0.35f + Math.random().toFloat() * 0.6f)
+                sparks += Spark(cx, horizon, cos(a) * speed * 1.6f, sin(a) * speed, 1f, k % 4 == 0)
+            }
+        }
+        val it = sparks.iterator()
+        while (it.hasNext()) {
+            val sp = it.next()
+            sp.x += sp.vx * dt
+            sp.y += sp.vy * dt
+            sp.life -= dt * 0.9f
+            if (sp.life <= 0f) { it.remove(); continue }
+            drawCircle((if (sp.red) Dot.Red else Dot.White).copy(alpha = sp.life), h * 0.006f * (0.5f + sp.life), Offset(sp.x, sp.y))
         }
     }
 }
