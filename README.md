@@ -11,8 +11,7 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
 
 | | Size |
 | --- | --- |
-| Download | **1.8 MB** |
-| Installed | **3.6 MB** |
+| Download | **3.8 MB** |
 
 For comparison, most streaming music apps install at well over 100 MB.
 
@@ -27,7 +26,7 @@ Most Nothing-styled players restyle a regular player. Dot is built around Nothin
 - **Every detail is dot matrix.** Dot sliders, an analog sleep dial, karaoke lyrics and a bedside clock, all in Nothing's black, white and red.
 - **It knows how you listen.** Wrapped stats, mood mixes that learn each song's tempo, and gestures.
 
-All of it in a **1.8 MB download**, fully offline, with no accounts and no internet permission.
+All of it in a **3.8 MB download**, fully offline, with no accounts and no internet permission.
 
 ## Download
 
@@ -397,7 +396,7 @@ Dot is built to stay light on battery and memory:
 - Search is debounced and matched off the main thread.
 - Album art is cached in three size buckets; vinyl grooves are a one-byte alpha mask.
 - Tempo is learned once per song from its first 25 seconds, then never measured again.
-- Release builds are shrunk and optimised with R8: a 1.8 MB download and 3.6 MB installed.
+- Release builds are shrunk and optimised with R8 into a 3.8 MB APK.
 - Only English resources, arm64 native code and the audio extractors a music library needs are packaged.
 - Fonts are subset to Latin, and the Doto variable font is frozen to the one style Dot uses.
 
