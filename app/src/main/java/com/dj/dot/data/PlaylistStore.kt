@@ -1,13 +1,17 @@
 package com.dj.dot.data
 
 import android.content.Context
+import androidx.core.util.AtomicFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -15,7 +19,14 @@ import java.util.UUID
 
 /** Playlists, favourites and play counts, stored as one small JSON file. */
 class PlaylistStore(context: Context, private val scope: CoroutineScope) {
-    private val file = File(context.filesDir, "library.json")
+    private val dir = context.filesDir
+    private val file = AtomicFile(File(dir, "library.json"))
+    /** The file as it was when this session started, kept in case the main one gets damaged. */
+    private val previous = AtomicFile(File(dir, "library.json.prev"))
+    private var keptPrevious = false
+    /** One writer at a time, so a slow write can never overlap the next one. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val io = Dispatchers.IO.limitedParallelism(1)
 
     private val _playlists = MutableStateFlow<List<Playlist>>(emptyList())
     val playlists: StateFlow<List<Playlist>> = _playlists
@@ -40,24 +51,49 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
     private var saveJob: Job? = null
 
     init {
+        // Fall back to the copy kept from the previous session if the main file is unreadable.
+        val loaded = read(file) ?: read(previous)
+        if (loaded == null && file.baseFile.exists()) {
+            // Keep whatever is there aside instead of letting the next save write over it.
+            runCatching { file.baseFile.copyTo(File(dir, "library.json.corrupt"), overwrite = true) }
+        }
+        loaded?.let(::load)
+    }
+
+    private fun read(f: AtomicFile): JSONObject? =
+        if (!f.baseFile.exists()) null else runCatching { JSONObject(String(f.readFully())) }.getOrNull()
+
+    /** Each section is read on its own, so one bad field doesn't cost the rest. */
+    private fun load(root: JSONObject) {
         runCatching {
-            val root = JSONObject(file.readText())
             val pls = root.optJSONArray("playlists") ?: JSONArray()
-            _playlists.value = (0 until pls.length()).map { i ->
-                val o = pls.getJSONObject(i)
-                val ids = o.getJSONArray("songs")
-                Playlist(o.getString("id"), o.getString("name"), (0 until ids.length()).map { ids.getLong(it) })
+            _playlists.value = (0 until pls.length()).mapNotNull { i ->
+                runCatching {
+                    val o = pls.getJSONObject(i)
+                    val ids = o.getJSONArray("songs")
+                    Playlist(o.getString("id"), o.getString("name"), (0 until ids.length()).map { ids.getLong(it) })
+                }.getOrNull()
             }
+        }
+        runCatching {
             val fav = root.optJSONArray("favourites") ?: JSONArray()
             _favourites.value = (0 until fav.length()).map { fav.getLong(it) }.toSet()
+        }
+        runCatching {
             val counts = root.optJSONObject("counts") ?: JSONObject()
             _playCounts.value = counts.keys().asSequence().associate { it.toLong() to counts.getInt(it) }
+        }
+        runCatching {
             val listen = root.optJSONObject("listen") ?: JSONObject()
             _listenMs.value = listen.keys().asSequence().associate { it.toLong() to listen.getLong(it) }
+        }
+        runCatching {
             val daily = root.optJSONObject("daily") ?: JSONObject()
             _dailyMs.value = daily.keys().asSequence().associate { it to daily.getLong(it) }
-            root.optJSONArray("hours")?.let { h -> _hourMs.value = List(24) { h.optLong(it) } }
-            trackingSince = root.optLong("since", trackingSince)
+        }
+        runCatching { root.optJSONArray("hours")?.let { h -> _hourMs.value = List(24) { h.optLong(it) } } }
+        trackingSince = root.optLong("since", trackingSince)
+        runCatching {
             val tempo = root.optJSONObject("bpm") ?: JSONObject()
             _bpm.value = tempo.keys().asSequence().associate { it.toLong() to tempo.getInt(it) }
         }
@@ -180,25 +216,41 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
         saveJob?.cancel()
         saveJob = scope.launch {
             delay(400)
-            val root = JSONObject()
-                .put("playlists", JSONArray().apply {
-                    _playlists.value.forEach { p ->
-                        put(JSONObject().put("id", p.id).put("name", p.name).put("songs", JSONArray(p.songIds)))
-                    }
-                })
-                .put("favourites", JSONArray(_favourites.value.toList()))
-                .put("counts", JSONObject().apply { _playCounts.value.forEach { (k, v) -> put(k.toString(), v) } })
-                .put("listen", JSONObject().apply { _listenMs.value.forEach { (k, v) -> put(k.toString(), v) } })
-                .put("daily", JSONObject().apply { _dailyMs.value.forEach { (k, v) -> put(k, v) } })
-                .put("hours", JSONArray(_hourMs.value))
-                .put("since", trackingSince)
-                .put("bpm", JSONObject().apply { _bpm.value.forEach { (k, v) -> put(k.toString(), v) } })
-                .toString()
-            launch(Dispatchers.IO) {
-                val tmp = File(file.parentFile, "library.json.tmp")
-                tmp.writeText(root)
-                tmp.renameTo(file)
+            val json = toJson()
+            withContext(io + NonCancellable) {
+                if (!keptPrevious) {
+                    keptPrevious = true
+                    if (read(file) != null) runCatching { previous.write(file.readFully()) }
+                }
+                runCatching { file.write(json.toByteArray()) }
             }
         }
+    }
+
+    private fun toJson(): String = JSONObject()
+        .put("playlists", JSONArray().apply {
+            _playlists.value.forEach { p ->
+                put(JSONObject().put("id", p.id).put("name", p.name).put("songs", JSONArray(p.songIds)))
+            }
+        })
+        .put("favourites", JSONArray(_favourites.value.toList()))
+        .put("counts", JSONObject().apply { _playCounts.value.forEach { (k, v) -> put(k.toString(), v) } })
+        .put("listen", JSONObject().apply { _listenMs.value.forEach { (k, v) -> put(k.toString(), v) } })
+        .put("daily", JSONObject().apply { _dailyMs.value.forEach { (k, v) -> put(k, v) } })
+        .put("hours", JSONArray(_hourMs.value))
+        .put("since", trackingSince)
+        .put("bpm", JSONObject().apply { _bpm.value.forEach { (k, v) -> put(k.toString(), v) } })
+        .toString()
+}
+
+/** Writes through a temp file that is synced to disk before it replaces the old one. */
+internal fun AtomicFile.write(bytes: ByteArray) {
+    val out = startWrite()
+    try {
+        out.write(bytes)
+        finishWrite(out)
+    } catch (e: Throwable) {
+        failWrite(out)
+        throw e
     }
 }

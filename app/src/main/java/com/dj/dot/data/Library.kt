@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import androidx.core.util.AtomicFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -28,7 +29,7 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
     private var observer: ContentObserver? = null
     private var scanJob: Job? = null
 
-    private val cacheFile = File(context.filesDir, "library_cache.json")
+    private val cacheFile = AtomicFile(File(context.filesDir, "library_cache.json"))
 
     fun start() {
         if (observer == null) {
@@ -73,7 +74,7 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
     }
 
     private fun readCache(): Pair<String, List<Song>>? = runCatching {
-        val root = JSONObject(cacheFile.readText())
+        val root = JSONObject(String(cacheFile.readFully()))
         val arr = root.getJSONArray("songs")
         val songs = (0 until arr.length()).map { i ->
             val a = arr.getJSONArray(i)
@@ -95,9 +96,7 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
             arr.put(JSONArray().put(s.id).put(s.title).put(s.artist).put(s.album).put(s.albumId)
                 .put(s.duration).put(s.track).put(s.year).put(s.path).put(s.dateAdded))
         }
-        val tmp = File(cacheFile.parentFile, "library_cache.json.tmp")
-        tmp.writeText(JSONObject().put("key", key).put("songs", arr).toString())
-        tmp.renameTo(cacheFile)
+        cacheFile.write(JSONObject().put("key", key).put("songs", arr).toString().toByteArray())
     }
 
     private fun query(): List<Song> {
