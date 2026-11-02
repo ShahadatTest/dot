@@ -17,6 +17,7 @@ import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
@@ -101,6 +102,9 @@ class DotEngine(
     private val scope = MainScope()
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state
+    private val _format = MutableStateFlow<String?>(null)
+    /** What's playing, e.g. "MP3 · 320 KBPS · 44.1 KHZ". */
+    val format: StateFlow<String?> = _format
     private val _lyrics = MutableStateFlow<Lyrics?>(null)
     val lyrics: StateFlow<Lyrics?> = _lyrics
     /** elapsedRealtime when the sleep timer fires, 0 when off. */
@@ -254,7 +258,9 @@ class DotEngine(
         }
 
         override fun onTracksChanged(tracks: Tracks) {
-            if (p === active) refreshLyrics(tracks)
+            if (p !== active) return
+            refreshLyrics(tracks)
+            _format.value = describeFormat(tracks)
         }
 
         override fun onPlayerError(error: PlaybackException) {
@@ -663,6 +669,38 @@ class DotEngine(
             settings.loudness.value, settings.virtualizer.value, settings.reverb.value,
             settings.levelling.value, vibe(),
         )
+    }
+
+    private fun describeFormat(tracks: Tracks): String? {
+        val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_AUDIO && it.length > 0 } ?: return null
+        val f = group.getTrackFormat(0)
+        val mime = f.sampleMimeType ?: return null
+        val codec = when (mime) {
+            MimeTypes.AUDIO_MPEG -> "MP3"
+            MimeTypes.AUDIO_AAC -> "AAC"
+            MimeTypes.AUDIO_FLAC -> "FLAC"
+            MimeTypes.AUDIO_ALAC -> "ALAC"
+            MimeTypes.AUDIO_OPUS -> "OPUS"
+            MimeTypes.AUDIO_VORBIS -> "OGG"
+            MimeTypes.AUDIO_RAW -> "WAV"
+            MimeTypes.AUDIO_AMR_NB, MimeTypes.AUDIO_AMR_WB -> "AMR"
+            else -> mime.substringAfter('/').uppercase()
+        }
+        val lossless = codec in setOf("FLAC", "ALAC", "WAV")
+        val depth = when (f.pcmEncoding) {
+            C.ENCODING_PCM_24BIT -> "24-BIT"
+            C.ENCODING_PCM_32BIT, C.ENCODING_PCM_FLOAT -> "32-BIT"
+            C.ENCODING_PCM_16BIT -> if (lossless) "16-BIT" else null
+            else -> null
+        }
+        // Containers rarely carry a bitrate, so fall back to file size over duration.
+        val kbps = listOf(f.averageBitrate, f.bitrate).firstOrNull { it > 0 }?.div(1000)
+            ?: _state.value.current?.let { song ->
+                val bytes = runCatching { java.io.File(song.path).length() }.getOrDefault(0L)
+                if (bytes > 0 && song.duration > 0) (bytes * 8 / song.duration).toInt() else null
+            }
+        val rate = if (f.sampleRate > 0) "%s KHZ".format(if (f.sampleRate % 1000 == 0) "${f.sampleRate / 1000}" else "%.1f".format(f.sampleRate / 1000f)) else null
+        return listOfNotNull(codec, if (lossless) depth else kbps?.let { "$it KBPS" }, rate).joinToString(" · ")
     }
 
     private fun vibe() = Vibe.entries.getOrElse(settings.vibe.value) { Vibe.Off }
