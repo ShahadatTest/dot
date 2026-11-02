@@ -72,6 +72,7 @@ fun SettingsScreen() {
     val stripStyle by s.stripStyle.flow.collectAsStateWithLifecycle()
     val glyphMode by s.glyphMode.flow.collectAsStateWithLifecycle()
     val shake by s.shakeForRandom.flow.collectAsStateWithLifecycle()
+    val playOnConnect by s.playOnConnect.flow.collectAsStateWithLifecycle()
     val bedside by s.bedsideWhenCharging.flow.collectAsStateWithLifecycle()
     val scanning by dot.library.scanning.collectAsStateWithLifecycle()
     val lib by dot.library.data.collectAsStateWithLifecycle()
@@ -102,6 +103,7 @@ fun SettingsScreen() {
                 s.skipFadeMs.set(((it * 16).roundToInt() * 250).coerceAtLeast(250))
             }
         }
+        item { SwitchRow("Play when headphones connect", "Bluetooth, wired or USB; resumes your queue", playOnConnect) { s.playOnConnect.set(it) } }
         item { SwitchRow("Fade on play / pause", "Soft fade in and out instead of a hard cut", fadePause) { s.fadeOnPause.set(it) } }
 
         item { Section("Sound") }
