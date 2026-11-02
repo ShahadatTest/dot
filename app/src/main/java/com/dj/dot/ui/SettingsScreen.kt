@@ -62,6 +62,7 @@ fun SettingsScreen() {
     val skipFade by s.skipFadeMs.flow.collectAsStateWithLifecycle()
     val fadeSkip by s.fadeOnSkip.flow.collectAsStateWithLifecycle()
     val fadePause by s.fadeOnPause.flow.collectAsStateWithLifecycle()
+    val beatFade by s.beatAlignedFade.flow.collectAsStateWithLifecycle()
     val speed by s.speed.flow.collectAsStateWithLifecycle()
     val minDur by s.minDurationSec.flow.collectAsStateWithLifecycle()
     val hideWhatsApp by s.hideWhatsApp.flow.collectAsStateWithLifecycle()
@@ -97,6 +98,7 @@ fun SettingsScreen() {
                 steps = 24,
             ) { s.crossfadeMs.set(((it * 24).roundToInt() * 500)) }
         }
+        if (crossfade > 0) item { SwitchRow("Start blends on the beat", "Waits for the next beat before crossfading", beatFade) { s.beatAlignedFade.set(it) } }
         item { SwitchRow("Fade when skipping", "Quick blend when you tap next, previous or a song", fadeSkip) { s.fadeOnSkip.set(it) } }
         if (fadeSkip) item {
             SliderRow("Skip fade", "%.1f S".format(skipFade / 1000f), null, skipFade / 4000f, steps = 16) {
