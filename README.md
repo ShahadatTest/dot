@@ -35,6 +35,13 @@ Grab **`Dot-1.2.0.apk`** from the [latest release](https://github.com/dhananjay6
 
 > **Coming from 1.0 or 1.1?** From 1.2.0 Dot is signed with its own release key, so it can't update the older build in place. Back up first (**Settings → Back up**), uninstall the old Dot, install 1.2.0, then **Settings → Restore**. Later updates install in place again.
 
+## Demo
+
+<p align="center">
+  <img src="docs/demo/dot-demo.webp" width="800" alt="Dot demo: the library, Dot art, Halo and Vinyl covers, visualizers, the Visuals panel, the sleep dial and Party mode">
+</p>
+<p align="center"><a href="https://github.com/dhananjay6561/dot/releases/download/v1.2.0/dot-demo.mp4"><b>Watch the full demo in 1080p</b></a></p>
+
 <p align="center">
   <img src="docs/screenshots/home.webp" width="200" alt="Library">
   <img src="docs/screenshots/dot-art.webp" width="200" alt="Dot art cover">
