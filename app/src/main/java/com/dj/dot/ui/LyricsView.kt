@@ -82,8 +82,11 @@ fun LyricsView(modifier: Modifier = Modifier) {
     if (l == null || song == null) {
         EmptyState(
             "No lyrics",
-            if (android.os.Environment.isExternalStorageManager()) "Keep a .lrc file with the song's name in the same folder."
-            else "Embedded lyrics show here. For .lrc files, allow file access in Settings.",
+            when {
+                com.dj.dot.playback.LyricsParser.hasFileAccess() -> "Keep a .lrc file with the song's name in the same folder."
+                android.os.Build.VERSION.SDK_INT >= 30 -> "Embedded lyrics show here. For .lrc files, allow file access in Settings."
+                else -> "Embedded lyrics show here."
+            },
             modifier,
         )
         return

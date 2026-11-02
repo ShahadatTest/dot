@@ -1,5 +1,6 @@
 package com.dj.dot.playback
 
+import android.os.Build
 import android.os.Environment
 import androidx.annotation.OptIn
 import androidx.media3.common.Tracks
@@ -58,13 +59,16 @@ object LyricsParser {
         }
     }
 
+    /** "All files access" only exists from Android 11; Android 10 has nothing to grant. */
+    fun hasFileAccess() = Build.VERSION.SDK_INT >= 30 && Environment.isExternalStorageManager()
+
     /**
      * A `.lrc` next to the audio file. Tries the exact file name first, then any `.lrc` in the
      * folder whose name matches the song's title or file name once site tags in brackets and
      * punctuation are stripped. Needs "All files access" since lrc files aren't media.
      */
     fun sidecar(song: Song): Lyrics? {
-        if (!Environment.isExternalStorageManager() || song.path.isEmpty()) return null
+        if (!hasFileAccess() || song.path.isEmpty()) return null
         val audio = File(song.path)
         val dir = audio.parentFile ?: return null
         val base = audio.nameWithoutExtension

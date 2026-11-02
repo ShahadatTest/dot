@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.clickable
@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dj.dot.DotApp
 import com.dj.dot.playback.AudioFx
 import com.dj.dot.playback.GlyphMode
+import com.dj.dot.playback.LyricsParser
 import com.dj.dot.playback.Vibe
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
@@ -79,10 +80,10 @@ fun SettingsScreen() {
     val scanning by dot.library.scanning.collectAsStateWithLifecycle()
     val lib by dot.library.data.collectAsStateWithLifecycle()
 
-    var fileAccess by remember { mutableStateOf(Environment.isExternalStorageManager()) }
+    var fileAccess by remember { mutableStateOf(LyricsParser.hasFileAccess()) }
     var unrestricted by remember { mutableStateOf(isUnrestricted(context)) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        fileAccess = Environment.isExternalStorageManager()
+        fileAccess = LyricsParser.hasFileAccess()
         unrestricted = isUnrestricted(context)
     }
 
@@ -167,11 +168,13 @@ fun SettingsScreen() {
         }
         item { BackupRows() }
         item { NavRow("Rescan library", if (scanning) "Scanning…" else "${lib.songs.size} songs") { dot.library.rescan() } }
-        item {
+        if (Build.VERSION.SDK_INT >= 30) item {
             NavRow("Lyrics file access", if (fileAccess) "Allowed" else "Needed for .lrc files") {
-                context.startActivity(
-                    Intent(AndroidSettings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}")),
-                )
+                runCatching {
+                    context.startActivity(
+                        Intent(AndroidSettings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:${context.packageName}")),
+                    )
+                }
             }
         }
 
