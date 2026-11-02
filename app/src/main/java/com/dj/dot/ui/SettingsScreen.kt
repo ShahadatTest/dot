@@ -127,7 +127,7 @@ fun SettingsScreen() {
         }
 
         item { Section("Gestures") }
-        item { SwitchRow("Shake for a random song", "Two firm shakes jump to something random", shake) { s.shakeForRandom.set(it) } }
+        item { SwitchRow("Shake for a random song", "Shake the phone back and forth a few times", shake) { s.shakeForRandom.set(it) } }
         item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
                 listOf(

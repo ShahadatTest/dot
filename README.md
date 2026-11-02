@@ -100,7 +100,7 @@ Grab **`Dot-1.0.0.apk`** from the [latest release](https://github.com/dhananjay6
 **Gestures**
 - Double-tap the art to like, with a heart burst
 - Swipe the art sideways for next or previous, swipe up for the queue, swipe down to close
-- Shake twice for a random song
+- Shake the phone back and forth for a random song
 
 **Feel**
 - Nothing-style dot-matrix sliders that grow under your finger, with value bubbles and haptic ticks
