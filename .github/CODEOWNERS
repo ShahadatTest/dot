@@ -1,0 +1,11 @@
+# Changes to permissions, build, signing, CI and agent rules need the maintainer's review.
+/app/src/main/AndroidManifest.xml  @dhananjay6561
+/app/build.gradle.kts              @dhananjay6561
+/build.gradle.kts                  @dhananjay6561
+/settings.gradle.kts               @dhananjay6561
+/gradle/                           @dhananjay6561
+/app/proguard-rules.pro            @dhananjay6561
+/.github/                          @dhananjay6561
+/AGENTS.md                         @dhananjay6561
+/CLAUDE.md                         @dhananjay6561
+/SECURITY.md                       @dhananjay6561

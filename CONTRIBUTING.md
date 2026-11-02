@@ -53,7 +53,9 @@ The Glyph lights need Nothing's API key in release builds: pass `-PnothingApiKey
 
 - Small, focused commits with short, lowercase, present-tense messages, for example `add queue reorder by drag`.
 - One topic per pull request. Describe what changed and how you tested it on a real phone.
-- CI must pass. It builds the app on every pull request.
+- Fill in the template's impact and blast radius section: what breaks if the change is wrong, and whether saved data is affected.
+- Using an AI coding agent? It must follow [AGENTS.md](AGENTS.md), and the PR should say it was AI-assisted.
+- CI must pass. It runs lint, the unit tests and a release build on every pull request.
 - By contributing you agree that your contributions are licensed under the Apache License, Version 2.0.
 
 ## Code of conduct
