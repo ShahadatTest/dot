@@ -45,6 +45,8 @@ class Settings(context: Context) {
     val virtualizer = int("virtualizer", 0)
     val reverb = int("reverb", 0)
     val soundEffect = string("sound_effect", "Hi-Fi")
+    val levelling = bool("levelling", false)
+    val vibe = int("vibe", 0)
 
     // Library & UI
     val minDurationSec = int("min_duration", 30)
