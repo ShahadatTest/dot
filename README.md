@@ -31,7 +31,9 @@ All of it in a **1.8 MB download**, fully offline, with no accounts and no inter
 
 ## Download
 
-Grab **`Dot-1.1.0.apk`** from the [latest release](https://github.com/dhananjay6561/dot/releases/latest), open it on your phone and allow installing from that source. Android 10 or newer.
+Grab **`Dot-1.2.0.apk`** from the [latest release](https://github.com/dhananjay6561/dot/releases/latest), open it on your phone and allow installing from that source. Android 10 or newer.
+
+> **Coming from 1.0 or 1.1?** From 1.2.0 Dot is signed with its own release key, so it can't update the older build in place. Back up first (**Settings → Back up**), uninstall the old Dot, install 1.2.0, then **Settings → Restore**. Later updates install in place again.
 
 <p align="center">
   <img src="docs/screenshots/home.webp" width="200" alt="Library">
