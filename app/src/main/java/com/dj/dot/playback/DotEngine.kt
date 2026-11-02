@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioFocusRequest
+import android.media.AudioDeviceCallback
+import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.audiofx.AudioEffect
 import android.os.Handler
@@ -61,6 +63,11 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
+
+private val HEADPHONE_TYPES = setOf(
+    AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET,
+    AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLE_HEADSET,
+)
 
 fun Song.toMediaItem(): MediaItem = MediaItem.Builder()
     .setMediaId(id.toString())
@@ -174,7 +181,20 @@ class DotEngine(
         }
     }
 
+    /** Starts the queue when headphones connect; the first callback only lists what's already plugged in. */
+    private val headphoneCallback = object : AudioDeviceCallback() {
+        private var primed = false
+        override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) {
+            if (!primed) { primed = true; return }
+            if (!settings.playOnConnect.value || wantPlay || items.isEmpty()) return
+            if (added.none { it.isSink && it.type in HEADPHONE_TYPES }) return
+            // Give Bluetooth a moment to take over the audio route before starting.
+            scope.launch { delay(900); if (!wantPlay) play() }
+        }
+    }
+
     init {
+        audioManager.registerAudioDeviceCallback(headphoneCallback, Handler(Looper.getMainLooper()))
         ContextCompat.registerReceiver(
             app, noisyReceiver, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), ContextCompat.RECEIVER_EXPORTED,
         )
