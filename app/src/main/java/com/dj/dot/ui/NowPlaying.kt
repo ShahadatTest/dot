@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -156,6 +157,12 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                         "${song.artist}  ·  ${song.album}", color = Dot.Muted, style = MonoSmall,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
+                    val format by engine.format.collectAsStateWithLifecycle()
+                    format?.let {
+                        Box(
+                            Modifier.padding(top = 6.dp).border(1.dp, Dot.Line, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp),
+                        ) { Label(it) }
+                    }
                 }
                 val fav = song.id in favs
                 // Liking pops the heart; unliking just morphs back.
