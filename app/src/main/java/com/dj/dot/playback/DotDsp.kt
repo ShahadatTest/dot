@@ -84,8 +84,9 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
     private var limiterRelease = 0f
 
     override fun onConfigure(inputAudioFormat: AudioProcessor.AudioFormat): AudioProcessor.AudioFormat {
+        // Surround and other formats pass through untouched instead of failing the track.
         if (inputAudioFormat.encoding != C.ENCODING_PCM_16BIT || inputAudioFormat.channelCount !in 1..2) {
-            throw AudioProcessor.UnhandledAudioFormatException(inputAudioFormat)
+            return AudioProcessor.AudioFormat.NOT_SET
         }
         rate = inputAudioFormat.sampleRate
         channels = inputAudioFormat.channelCount
