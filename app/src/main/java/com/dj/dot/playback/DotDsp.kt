@@ -20,30 +20,31 @@ import kotlin.math.tanh
 /** Sound modes that change the character of the whole track. */
 enum class Vibe(val label: String) { Off("Off"), Slowed("Slowed + Reverb"), Nightcore("Nightcore"), EightD("8D"), Karaoke("Karaoke") }
 
+/** One complete set of sound settings. Never changed after it is built, so it can cross threads safely. */
+class DspConfig(
+    val enabled: Boolean = false,
+    /** Ten band gains in dB, 31 Hz to 16 kHz. */
+    val bands: FloatArray = FloatArray(DspParams.BAND_COUNT),
+    val bassDb: Float = 0f,
+    /** Stereo width, 1 = original, up to ~2.2. */
+    val width: Float = 1f,
+    val reverbSize: Float = 0f,
+    val reverbWet: Float = 0f,
+    val reverbDamp: Float = 0.4f,
+    val makeupDb: Float = 0f,
+    val levelling: Boolean = false,
+    val vibe: Vibe = Vibe.Off,
+    /** -1 = all left, 1 = all right. */
+    val balance: Float = 0f,
+    val mono: Boolean = false,
+)
+
 /**
- * Everything the processor needs, written from the UI thread and read on the audio thread.
- * [version] changes on every edit so processors know to rebuild their filters.
+ * The settings handed from the UI thread to the audio thread. Each edit publishes a whole new
+ * [DspConfig] in one write, so the processor never sees half of an update.
  */
 class DspParams {
-    @Volatile var enabled = false
-    /** Ten band gains in dB, 31 Hz to 16 kHz. */
-    @Volatile var bands = FloatArray(BAND_COUNT)
-    @Volatile var bassDb = 0f
-    /** Stereo width, 1 = original, up to ~2.2. */
-    @Volatile var width = 1f
-    @Volatile var reverbSize = 0f
-    @Volatile var reverbWet = 0f
-    @Volatile var reverbDamp = 0.4f
-    @Volatile var makeupDb = 0f
-    @Volatile var levelling = false
-    @Volatile var vibe = Vibe.Off
-    /** -1 = all left, 1 = all right. */
-    @Volatile var balance = 0f
-    @Volatile var mono = false
-    @Volatile var version = 0
-        private set
-
-    fun commit() { version++ }
+    @Volatile var current = DspConfig()
 
     companion object {
         const val BAND_COUNT = 10
@@ -61,7 +62,8 @@ class DspParams {
 class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
     private var rate = 44100
     private var channels = 2
-    private var builtVersion = -1
+    /** The config the filters were last built from; null forces a rebuild. */
+    private var built: DspConfig? = null
 
     private val eq = Array(2) { Array(DspParams.BAND_COUNT) { Biquad() } }
     private val activeBands = BooleanArray(DspParams.BAND_COUNT)
@@ -90,7 +92,7 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
         }
         rate = inputAudioFormat.sampleRate
         channels = inputAudioFormat.channelCount
-        builtVersion = -1
+        built = null
         return inputAudioFormat
     }
 
@@ -99,18 +101,24 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
         if (bytes == 0) return
         val out = replaceOutputBuffer(bytes)
         val input = inputBuffer.order(ByteOrder.nativeOrder())
-        if (!params.enabled) {
+        // Read the settings once per buffer; everything below works from this snapshot.
+        val cfg = params.current
+        if (!cfg.enabled) {
             out.put(input)
             out.flip()
             return
         }
-        if (builtVersion != params.version) rebuild()
+        if (built !== cfg) rebuild(cfg)
 
-        val vibe = params.vibe
-        val width = params.width
+        val vibe = cfg.vibe
+        val width = cfg.width
         val stereo = channels == 2
-        val useReverb = params.reverbWet > 0.001f
-        val levelling = params.levelling
+        val reverbWet = cfg.reverbWet
+        val useReverb = reverbWet > 0.001f
+        val levelling = cfg.levelling
+        val useBass = cfg.bassDb != 0f
+        val mono = cfg.mono
+        val balance = cfg.balance
         val phaseStep = 2.0 * PI * 0.11 / rate // one turn around the head every ~9 s
 
         val frames = bytes / (2 * channels)
@@ -125,7 +133,7 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
                 l = eq[0][b].process(l)
                 r = eq[1][b].process(r)
             }
-            if (params.bassDb != 0f) {
+            if (useBass) {
                 l = shelf[0].process(l)
                 r = shelf[1].process(r)
             }
@@ -161,10 +169,10 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
             }
 
             if (useReverb) {
-                val dry = 1f - params.reverbWet * 0.5f
+                val dry = 1f - reverbWet * 0.5f
                 val inMono = (l + r) * 0.5f
-                l = l * dry + reverb[0].process(inMono) * params.reverbWet
-                r = r * dry + reverb[1].process(inMono) * params.reverbWet
+                l = l * dry + reverb[0].process(inMono) * reverbWet
+                r = r * dry + reverb[1].process(inMono) * reverbWet
             }
 
             if (levelling) {
@@ -180,13 +188,12 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
             r *= makeup
 
             if (stereo) {
-                if (params.mono) {
+                if (mono) {
                     val m = (l + r) * 0.5f
                     l = m
                     r = m
                 }
-                val b = params.balance
-                if (b > 0f) l *= 1f - b else if (b < 0f) r *= 1f + b
+                if (balance > 0f) l *= 1f - balance else if (balance < 0f) r *= 1f + balance
             }
 
             // Peak limiter: instant attack, ~120 ms release, then a soft clip for safety.
@@ -212,7 +219,7 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
         karaokeLow.reset()
         reverb.forEach { it.clear() }
         envelope = 0f
-        builtVersion = -1
+        built = null
     }
 
     override fun onReset() {
@@ -221,8 +228,8 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
         levelGain = 1f
     }
 
-    private fun rebuild() {
-        val bands = params.bands
+    private fun rebuild(cfg: DspConfig) {
+        val bands = cfg.bands
         var headroom = 0f
         for (b in 0 until DspParams.BAND_COUNT) {
             val g = bands.getOrElse(b) { 0f }
@@ -231,16 +238,16 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
             for (c in 0..1) eq[c][b].peaking(rate, f, 1.1f, g)
             headroom = max(headroom, g)
         }
-        for (c in 0..1) shelf[c].lowShelf(rate, 95f, params.bassDb)
+        for (c in 0..1) shelf[c].lowShelf(rate, 95f, cfg.bassDb)
         karaokeLow.lowPass(rate, 160f)
-        headroom = max(headroom, params.bassDb)
+        headroom = max(headroom, cfg.bassDb)
         // Pull the signal down by most of the biggest boost so the EQ can't clip; the limiter
         // handles whatever is left.
         preamp = dbToGain(-headroom * 0.85f)
-        makeup = dbToGain(params.makeupDb)
-        reverb.forEach { it.tune(rate, params.reverbSize, params.reverbDamp) }
+        makeup = dbToGain(cfg.makeupDb)
+        reverb.forEach { it.tune(rate, cfg.reverbSize, cfg.reverbDamp) }
         limiterRelease = kotlin.math.exp(-1.0 / (0.12 * rate)).toFloat()
-        builtVersion = params.version
+        built = cfg
     }
 
     private companion object {

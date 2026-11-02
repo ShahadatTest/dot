@@ -26,19 +26,20 @@ class AudioFx {
         mono: Boolean = false,
     ) {
         val reverb = if (vibe == Vibe.Slowed) SLOWED_REVERB else reverbs.getOrNull(reverbIndex)?.second?.takeIf { enabled }
-        params.enabled = enabled || levelling || vibe != Vibe.Off || balance != 0 || mono
-        params.bands = FloatArray(bandCount) { if (enabled) levels.getOrElse(it) { 0 } / 100f else 0f }
-        params.bassDb = if (enabled) bassStrength.coerceIn(0, 1000) / 1000f * 10f else 0f
-        params.width = if (enabled) 1f + surround.coerceIn(0, 1000) / 1000f * 1.2f else 1f
-        params.reverbSize = reverb?.size ?: 0f
-        params.reverbWet = reverb?.wet ?: 0f
-        params.reverbDamp = reverb?.damp ?: 0.4f
-        params.makeupDb = if (enabled) loudnessMb.coerceIn(0, 1200) / 100f else 0f
-        params.levelling = levelling
-        params.vibe = vibe
-        params.balance = balance.coerceIn(-100, 100) / 100f
-        params.mono = mono
-        params.commit()
+        params.current = DspConfig(
+            enabled = enabled || levelling || vibe != Vibe.Off || balance != 0 || mono,
+            bands = FloatArray(bandCount) { if (enabled) levels.getOrElse(it) { 0 } / 100f else 0f },
+            bassDb = if (enabled) bassStrength.coerceIn(0, 1000) / 1000f * 10f else 0f,
+            width = if (enabled) 1f + surround.coerceIn(0, 1000) / 1000f * 1.2f else 1f,
+            reverbSize = reverb?.size ?: 0f,
+            reverbWet = reverb?.wet ?: 0f,
+            reverbDamp = reverb?.damp ?: 0.4f,
+            makeupDb = if (enabled) loudnessMb.coerceIn(0, 1200) / 100f else 0f,
+            levelling = levelling,
+            vibe = vibe,
+            balance = balance.coerceIn(-100, 100) / 100f,
+            mono = mono,
+        )
     }
 
     data class ReverbPreset(val size: Float, val wet: Float, val damp: Float)
