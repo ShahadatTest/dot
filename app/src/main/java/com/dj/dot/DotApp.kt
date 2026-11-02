@@ -6,6 +6,7 @@ import com.dj.dot.data.PlaylistStore
 import com.dj.dot.data.Settings
 import com.dj.dot.playback.DotEngine
 import com.dj.dot.playback.GlyphLights
+import com.dj.dot.playback.Headphones
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -18,6 +19,7 @@ class DotApp : Application() {
     lateinit var library: Library private set
     lateinit var engine: DotEngine private set
     lateinit var glyph: GlyphLights private set
+    lateinit var headphones: Headphones private set
 
     override fun onCreate() {
         super.onCreate()
@@ -30,6 +32,7 @@ class DotApp : Application() {
         val playing = engine.state.map { it.playing }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, false)
         glyph = GlyphLights(this, engine.spectrum, settings, playing) { engine.progress }
         glyph.start()
+        headphones = Headphones(this).also { it.start() }
     }
 
     companion object {
