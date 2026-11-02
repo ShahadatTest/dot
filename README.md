@@ -18,7 +18,7 @@ For comparison, most streaming music apps install at well over 100 MB.
 
 ## Download
 
-Grab **`Dot-1.0.0.apk`** from the [latest release](https://github.com/dhananjay6561/dot/releases/latest), open it on your phone and allow installing from that source. Android 10 or newer.
+Grab **`Dot-1.1.0.apk`** from the [latest release](https://github.com/dhananjay6561/dot/releases/latest), open it on your phone and allow installing from that source. Android 10 or newer.
 
 <p align="center">
   <img src="docs/screenshots/home.webp" width="200" alt="Library">
@@ -31,12 +31,14 @@ Grab **`Dot-1.0.0.apk`** from the [latest release](https://github.com/dhananjay6
 
 **Playback**
 - Crossfade between tracks on an equal-power curve, adjustable from off to 12 seconds
+- Blends start on the beat: Dot listens to the end of each song and drops the next one on a beat
 - Short blend when skipping, soft fade on play and pause
 - Gapless playback when crossfade is off
 - Shuffle, repeat all, repeat one, playback speed from 0.5x to 2x
 - Queue editing: play next, add to queue, reorder, remove
 - Picks up where you left off: queue, track and position survive restarts
 - Swiping Dot away from recents stops the music
+- Starts your queue when headphones connect (Bluetooth, wired or USB)
 
 **Sleep timer**
 - Analog dial: drag the knob around the face, one turn per hour, up to three hours
@@ -48,6 +50,7 @@ Grab **`Dot-1.0.0.apk`** from the [latest release](https://github.com/dhananjay6
 - 10-band equalizer from 31 Hz to 16 kHz (±12 dB) with nine presets and per-band dot sliders
 - A true low-shelf bass boost, mid/side stereo widening (Panoramic) and room reverb (Room, Studio, Hall, Arena, Plate)
 - Automatic headroom and a peak limiter, so boosted settings never clip or crackle
+- Left/right balance and a mono switch, for one earbud or uneven hearing
 - Volume levelling, so quiet and loud tracks play at a similar level
 - **Vibes:** Slowed + Reverb, Nightcore, 8D (the song circles your head) and Karaoke (vocal remover)
 - Lossless formats: FLAC, ALAC, WAV, plus Opus, Vorbis, MP3 and AAC
@@ -61,7 +64,7 @@ Grab **`Dot-1.0.0.apk`** from the [latest release](https://github.com/dhananjay6
 - Three visualizer styles, switched by tapping the strip: **Grid**, **Mirror** and **Wave**
 - Real-time beat detection with a live BPM readout
 - A Visuals panel with live previews of every style, rendered from the song that's playing
-- **Party mode:** a full-screen landscape dot field with beat rings and the song in big dot type, screen kept on
+- **Party mode:** a full-screen landscape scene in dots: a red sun on the horizon, a spectrum skyline, a floor that rushes towards you at the song's tempo, and sparks on every beat
 - **Bedside clock:** a big dot-matrix clock with what's playing; opens by itself on the charger after a minute untouched, dims, and shifts slightly so the OLED never burns in
 
 **Glyph lights** (Nothing Phone (4a))
@@ -107,6 +110,19 @@ Grab **`Dot-1.0.0.apk`** from the [latest release](https://github.com/dhananjay6
 - Buttons and pills squish on press, icons scale and cross-fade when they change, colours fade between states
 - Liking a song pops the heart
 - Two-pane Now Playing in landscape; sheets open fully and scroll on short screens
+
+**Earphones**
+- Shows the connected Bluetooth earphones and the battery level they report, on the Sound screen and as a chip on Now Playing
+- Android gives regular apps one overall level; separate left, right and case levels are reserved for system apps
+
+**Widget and tile**
+- Home-screen widget with the cover, the title in dot type, play/pause and next
+- Quick Settings tile to play or pause from the notification shade, showing the current song
+- Both work even when Dot isn't open
+
+**Backup**
+- Back up playlists, favourites, play counts, listening stats and learned tempos to a file, and restore them later
+- Songs are matched by file path, then by title and artist, so a backup survives a phone reset or a new phone
 
 **System**
 - Keeps playing in the background and with the screen locked
@@ -194,6 +210,8 @@ flowchart TB
         Service["DotService<br/>MediaSession"]
         Glyph["GlyphLights<br/>Glyph SDK"]
         Media["Notification · lock screen<br/>headset · Bluetooth"]
+        Widget["Widget · Quick Settings tile"]
+        Ear["Headphones<br/>battery · auto-play"]
     end
 
     UI -- "StateFlow" --> Core
@@ -208,6 +226,8 @@ flowchart TB
     Spec -- "BPM" --> Tracker
     Service <--> Engine
     Media <--> Service
+    Widget -- "MediaController" --> Service
+    Ear --> Engine
 ```
 
 - **The UI never touches ExoPlayer.** Screens read `StateFlow`s and call methods on `DotEngine`, which owns both players.
@@ -249,10 +269,12 @@ flowchart LR
     Home --> Search & Settings & Wrapped
     Settings --> Sound
     Mini["Mini player"] --> NP["Now Playing"]
-    NP --> Visuals & Sleep["Sleep dial"] & Sound & Party["Party mode"]
+    NP --> Visuals & Sleep["Sleep dial"] & Sound
+    Visuals --> Party["Party mode"] & Bedside
     NP -. "swipe up" .-> Queue
     NP -. "tap" .-> Lyrics
     Charging["Charging + idle"] -.-> Bedside["Bedside clock"]
+    Widget["Widget · tile"] -.-> Mini
 ```
 
 ## How crossfade works
@@ -382,6 +404,7 @@ app/src/main/java/com/dj/dot
 │   ├── AudioFx.kt         maps sound settings, presets and modes onto the chain
 │   ├── Spectrum.kt        FFT, bands, beats, BPM, waveform
 │   ├── GlyphLights.kt     rear light strip modes
+│   ├── Headphones.kt      connected earphones and their battery level
 │   └── Lyrics.kt          LRC, ID3 USLT and Vorbis lyrics, lrc matching
 └── ui/
     ├── Theme.kt           colours and type
@@ -403,6 +426,10 @@ app/src/main/java/com/dj/dot
     ├── SearchScreen.kt
     ├── SettingsScreen.kt  settings and the sound screen
     └── Sheets.kt          song menu, playlist picker, dialogs
+└── widget/
+    ├── DotWidget.kt       home-screen widget
+    ├── DotTileService.kt  Quick Settings tile
+    └── RemoteControl.kt   sends widget and tile commands through the media session
 ```
 
 ## Building
@@ -435,7 +462,8 @@ Or copy the APK to the phone and open it, allowing installs from that source whe
 - Allow music access when prompted.
 - **Settings → Keep playing in background** exempts Dot from battery optimisation, so the system never stops playback.
 - **Settings → Lyrics file access** is only needed if you keep `.lrc` files next to your songs.
-- On a Nothing Phone (4a), open the Glyph button on Now Playing and pick a light mode.
+- On a Nothing Phone (4a), open the Visuals button on Now Playing and pick a Glyph light mode.
+- Long-press your home screen to add the Dot widget, and edit Quick Settings to add the Dot tile.
 
 ## Permissions
 
@@ -446,6 +474,7 @@ Or copy the APK to the phone and open it, allowing installs from that source whe
 | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Keep playing in the background |
 | `WAKE_LOCK` | Don't stall with the screen off |
 | `com.nothing.ketchum.permission.ENABLE` | Drive the Glyph lights on Nothing phones |
+| `BLUETOOTH_CONNECT` | Optional, asked from the Sound screen, to show the earphones' battery |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Optional, asked from Settings |
 | `MANAGE_EXTERNAL_STORAGE` | Optional, only for `.lrc` files |
 
@@ -453,10 +482,10 @@ Dot has no internet permission.
 
 ## Roadmap
 
-- Beat-matched crossfade
-- Home-screen widget and Quick Settings tile
-- Format badge (codec, bit depth, sample rate)
-- Backup and restore of playlists and stats
+- Glyph Composer: tap along to a song to record your own light show for the strip
+- Guess the Song: a five-second-clip quiz from your own library
+- Lyric cards: share any lyric line as a dot-matrix image
+- Sunrise alarm with the Glyph strip slowly brightening
 
 ## Contributing
 
