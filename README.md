@@ -12,6 +12,7 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
 | | Size |
 | --- | --- |
 | Download | **3.8 MB** |
+| Installed | **3.9 MB** |
 
 For comparison, most streaming music apps install at well over 100 MB.
 
@@ -396,7 +397,7 @@ Dot is built to stay light on battery and memory:
 - Search is debounced and matched off the main thread.
 - Album art is cached in three size buckets; vinyl grooves are a one-byte alpha mask.
 - Tempo is learned once per song from its first 25 seconds, then never measured again.
-- Release builds are shrunk and optimised with R8 into a 3.8 MB APK.
+- Release builds are shrunk and optimised with R8: a 3.8 MB download and 3.9 MB installed.
 - Only English resources, arm64 native code and the audio extractors a music library needs are packaged.
 - Fonts are subset to Latin, and the Doto variable font is frozen to the one style Dot uses.
 
