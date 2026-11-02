@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -36,6 +35,7 @@ import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleStartEffect
 import com.dj.dot.data.Song
 import com.dj.dot.playback.Spectrum
 import kotlinx.coroutines.Dispatchers
@@ -71,9 +71,10 @@ class VizState(val bands: Int, wavePoints: Int) {
 @Composable
 fun rememberVizState(spectrum: Spectrum, playing: Boolean): VizState {
     val state = remember { VizState(spectrum.bands, spectrum.wavePoints) }
-    DisposableEffect(Unit) {
+    // Analysis only runs while Dot is on screen; a locked phone shouldn't keep the FFT busy.
+    LifecycleStartEffect(spectrum) {
         spectrum.acquire()
-        onDispose { spectrum.release() }
+        onStopOrDispose { spectrum.release() }
     }
     LaunchedEffect(playing) {
         var lastAudible = System.nanoTime() - AUDIO_LATENCY_NS
