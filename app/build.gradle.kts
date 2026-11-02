@@ -1,3 +1,6 @@
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
+import java.security.MessageDigest
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -47,16 +50,29 @@ android {
 
 kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }
 
-// Nothing's Glyph SDK isn't on Maven, so it is fetched from the official repo on first build.
+// Nothing's Glyph SDK isn't on Maven. It is fetched from a fixed commit of the official repo and
+// checked against a known hash, so nothing that changes upstream can slip into a build.
+val glyphSdkCommit = "8ee807a9312a640b0d43051450924e3446bc1d78"
+val glyphSdkSha256 = "329393019db5f0f987c6245855d13fa273d06756c68829ca0f6ae686ba336da1"
 val glyphSdk = layout.projectDirectory.file("libs/glyph-matrix-sdk-2.0.aar")
 val fetchGlyphSdk by tasks.registering {
     val target = glyphSdk.asFile
+    inputs.property("sha256", glyphSdkSha256)
     outputs.file(target)
-    onlyIf { !target.exists() }
     doLast {
+        fun sha256(f: File) = MessageDigest.getInstance("SHA-256").digest(f.readBytes())
+            .joinToString("") { "%02x".format(it) }
+        if (target.exists() && sha256(target) == glyphSdkSha256) return@doLast
         target.parentFile.mkdirs()
-        uri("https://github.com/Nothing-Developer-Programme/Glyph-Developer-Kit/raw/main/sdk/glyph-matrix-sdk-2.0.aar")
-            .toURL().openStream().use { input -> target.outputStream().use { input.copyTo(it) } }
+        val download = File(target.path + ".download")
+        uri("https://github.com/Nothing-Developer-Programme/Glyph-Developer-Kit/raw/$glyphSdkCommit/sdk/glyph-matrix-sdk-2.0.aar")
+            .toURL().openStream().use { input -> download.outputStream().use { input.copyTo(it) } }
+        val actual = sha256(download)
+        if (actual != glyphSdkSha256) {
+            download.delete()
+            throw GradleException("Glyph SDK checksum mismatch: expected $glyphSdkSha256, got $actual")
+        }
+        Files.move(download.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
     }
 }
 tasks.named("preBuild") { dependsOn(fetchGlyphSdk) }
