@@ -126,7 +126,12 @@ fun SettingsScreen() {
         item { SwitchRow("Bedside clock when charging", "After a minute untouched on the charger", bedside) { s.bedsideWhenCharging.set(it) } }
         item { NavRow("Open bedside clock", "Big dot clock with what's playing") { app.bedside = true } }
         if (dot.glyph.supported) item {
-            PickerRow("Glyph lights", "The light strip on the back reacts to your music", GlyphMode.entries.map { it.label }, glyphMode) { s.glyphMode.set(it) }
+            val unavailable by dot.glyph.unavailable.collectAsStateWithLifecycle()
+            PickerRow(
+                "Glyph lights",
+                if (unavailable) GLYPH_UNAVAILABLE else "The light strip on the back reacts to your music",
+                GlyphMode.entries.map { it.label }, glyphMode,
+            ) { s.glyphMode.set(it) }
         }
 
         item { Section("Gestures") }
@@ -641,3 +646,6 @@ private fun readCapped(input: java.io.InputStream, limit: Long): ByteArray {
     }
     return out.toByteArray()
 }
+
+/** Shown when the phone won't open a Glyph session for Dot. */
+const val GLYPH_UNAVAILABLE = "The light strip didn't respond. On a test build, turn on Glyph debug mode in developer options"

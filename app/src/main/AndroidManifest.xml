@@ -25,7 +25,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Dot">
 
-        <meta-data android:name="NothingKey" android:value="test" />
+        <!-- "test" only works with Glyph debug mode on; release builds pass the real key, see build.gradle.kts. -->
+        <meta-data android:name="NothingKey" android:value="${nothingApiKey}" />
 
         <activity
             android:name=".MainActivity"

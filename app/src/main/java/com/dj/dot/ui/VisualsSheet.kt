@@ -148,8 +148,9 @@ private fun GlyphSection(pick: (() -> Unit) -> Unit) {
     val brightness by s.glyphBrightness.flow.collectAsStateWithLifecycle()
     val sensitivity by s.glyphSensitivity.flow.collectAsStateWithLifecycle()
     val beatFlash by s.glyphBeatFlash.flow.collectAsStateWithLifecycle()
+    val unavailable by DotApp.instance.glyph.unavailable.collectAsStateWithLifecycle()
 
-    SectionHeader("Glyph lights", "The light strip on the back of your phone")
+    SectionHeader("Glyph lights", if (unavailable) GLYPH_UNAVAILABLE else "The light strip on the back of your phone")
     Row(Modifier.fillMaxWidth().height(232.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.width(72.dp).fillMaxHeight().clip(RoundedCornerShape(20.dp)).background(Dot.Surface2), contentAlignment = Alignment.Center) {
             StripMirror(Modifier.width(24.dp).fillMaxHeight().padding(vertical = 16.dp))

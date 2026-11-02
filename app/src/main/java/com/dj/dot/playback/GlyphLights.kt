@@ -14,6 +14,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
@@ -50,6 +51,9 @@ class GlyphLights(
 
     val supported: Boolean = Build.VERSION.SDK_INT >= 34 && runCatching { Common.is25111() }.getOrDefault(false)
 
+    /** True when the phone refused the Glyph session, so the UI can say why the strip stays dark. */
+    val unavailable = MutableStateFlow(false)
+
     fun start() {
         if (!supported) return
         scope.launch {
@@ -70,8 +74,12 @@ class GlyphLights(
                         m.register(Glyph.DEVICE_25111)
                         m.openSession()
                         ready = true
+                        unavailable.value = false
                         onReady()
-                    }.onFailure { Log.w(TAG, "Glyph session failed", it) }
+                    }.onFailure {
+                        Log.w(TAG, "Glyph session failed", it)
+                        unavailable.value = true
+                    }
                     connecting = false
                 }
             }

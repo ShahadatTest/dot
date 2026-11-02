@@ -22,6 +22,11 @@ android {
         // Dot's UI is English and it ships for phones; drop library translations and other CPUs.
         androidResources.localeFilters += "en"
         ndk { abiFilters += "arm64-v8a" }
+        // Nothing's Glyph API key, from -PnothingApiKey, ~/.gradle/gradle.properties or NOTHING_API_KEY.
+        // Without it the SDK's "test" key is used, which needs Glyph debug mode on the phone.
+        manifestPlaceholders["nothingApiKey"] = providers.gradleProperty("nothingApiKey")
+            .orElse(providers.environmentVariable("NOTHING_API_KEY"))
+            .getOrElse("test")
     }
 
     buildTypes {
