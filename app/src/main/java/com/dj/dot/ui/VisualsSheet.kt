@@ -73,6 +73,7 @@ fun VisualsSheet(song: Song, playing: Boolean, onDismiss: () -> Unit) {
     val stripStyle by s.stripStyle.flow.collectAsStateWithLifecycle()
     val vizOn by s.visualizer.flow.collectAsStateWithLifecycle()
     val viz = rememberVizState(dot.engine.spectrum, playing)
+    val app = LocalAppState.current
 
     fun pick(action: () -> Unit) {
         haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -94,7 +95,18 @@ fun VisualsSheet(song: Song, playing: Boolean, onDismiss: () -> Unit) {
                 .padding(bottom = 24.dp),
         ) {
             DotTitle("Visuals", size = 30.sp)
-            Label("Pick what you see while you listen")
+            Label("Modes, cover styles, visualizer and Glyph lights")
+
+            SectionHeader("Modes", "Full-screen ways to listen")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Tile("Party mode", false, Modifier.weight(1f).aspectRatio(1.35f), { pick { onDismiss(); app.party = true } }) {
+                    StripVisualizer(viz, StripStyle.Mirror, Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 22.dp), showReadout = false)
+                }
+                Tile("Bedside clock", false, Modifier.weight(1f).aspectRatio(1.35f), { pick { onDismiss(); app.bedside = true } }) {
+                    val now = remember { java.util.Date() }
+                    DotTitle(android.text.format.DateFormat.format("h:mm", now).toString(), size = 30.sp)
+                }
+            }
 
             SectionHeader("Cover", "Tap the art on the player to cycle")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
