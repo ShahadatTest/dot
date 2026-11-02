@@ -48,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dj.dot.DotApp
 import com.dj.dot.playback.AudioFx
 import com.dj.dot.playback.GlyphMode
+import com.dj.dot.playback.Vibe
 import kotlin.math.roundToInt
 
 @Composable
@@ -211,6 +212,8 @@ fun EqualizerScreen() {
     val loud by s.loudness.flow.collectAsStateWithLifecycle()
     val surround by s.virtualizer.flow.collectAsStateWithLifecycle()
     val reverb by s.reverb.flow.collectAsStateWithLifecycle()
+    val levelling by s.levelling.flow.collectAsStateWithLifecycle()
+    val vibe by s.vibe.flow.collectAsStateWithLifecycle()
     val levels = remember(raw) { dot.engine.parseLevels(raw) }
     val span = maxOf(-fx.range.first, fx.range.last).toFloat()
 
@@ -240,7 +243,6 @@ fun EqualizerScreen() {
             }
         }
         item { DotTitle("Sound", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), size = 34.sp) }
-        if (!fx.available) item { Label("Audio effects aren't available on this device", Modifier.padding(20.dp), color = Dot.Red) }
 
         item { Section("Effects") }
         item {
@@ -254,6 +256,30 @@ fun EqualizerScreen() {
                         if (pair.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
+            }
+        }
+
+        item { Section("Vibes") }
+        item {
+            Column(Modifier.padding(horizontal = 20.dp)) {
+                Text("Change the whole feel of a track. Works with any sound mode.", color = Dot.Muted, style = MonoSmall)
+                Spacer(Modifier.height(10.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(Vibe.entries.size) { i ->
+                        Pill(Vibe.entries[i].label, { s.vibe.set(i) }, selected = vibe == i, accent = vibe == i && i != 0)
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    when (Vibe.entries[vibe]) {
+                        Vibe.Off -> " "
+                        Vibe.Slowed -> "Slower, deeper, in a big room"
+                        Vibe.Nightcore -> "Faster and higher, full energy"
+                        Vibe.EightD -> "The song circles your head. Use earphones"
+                        Vibe.Karaoke -> "Removes most centred vocals. Sing along"
+                    },
+                    color = Dot.White, style = MonoSmall,
+                )
             }
         }
 
@@ -307,19 +333,22 @@ fun EqualizerScreen() {
         item {
             SliderRow(
                 "Panoramic", "${surround / 10}%",
-                if (fx.surroundAvailable) "3D surround, best on earphones" else "Not supported on this device",
+                "3D surround, best on earphones",
                 surround / 1000f,
             ) { tweak { s.virtualizer.set((it * 1000).roundToInt()) } }
         }
         item {
-            SliderRow("Loudness", "+%.1f DB".format(loud / 100f), "Lifts quiet tracks", loud / 1000f) {
+            SwitchRow("Volume levelling", "Quiet and loud tracks play at a similar level", levelling) { s.levelling.set(it) }
+        }
+        item {
+            SliderRow("Loudness", "+%.1f DB".format(loud / 100f), "Lifts quiet tracks; the limiter stops clipping", loud / 1000f) {
                 tweak { s.loudness.set((it * 1000).roundToInt()) }
             }
         }
         item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
                 Text("Reverb", color = Dot.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text(if (fx.reverbAvailable) "Room ambience around the music" else "Not supported on this device", color = Dot.Muted, style = MonoSmall)
+                Text("Room ambience around the music", color = Dot.Muted, style = MonoSmall)
                 Spacer(Modifier.height(10.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(AudioFx.reverbs.size) { i ->
