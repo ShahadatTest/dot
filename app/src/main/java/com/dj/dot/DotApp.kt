@@ -7,11 +7,14 @@ import com.dj.dot.data.Settings
 import com.dj.dot.playback.DotEngine
 import com.dj.dot.playback.GlyphLights
 import com.dj.dot.playback.Headphones
+import com.dj.dot.widget.DotTileService
+import com.dj.dot.widget.DotWidget
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 
 class DotApp : Application() {
     lateinit var settings: Settings private set
@@ -33,6 +36,13 @@ class DotApp : Application() {
         glyph = GlyphLights(this, engine.spectrum, settings, playing) { engine.progress }
         glyph.start()
         headphones = Headphones(this).also { it.start() }
+        // Keep the home-screen widget and Quick Settings tile in step with playback.
+        scope.launch {
+            engine.state.map { it.current?.id to it.playing }.distinctUntilChanged().collect {
+                DotWidget.push(this@DotApp)
+                DotTileService.requestRefresh(this@DotApp)
+            }
+        }
     }
 
     companion object {

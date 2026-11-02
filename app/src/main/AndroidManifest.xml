@@ -49,6 +49,32 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <receiver
+            android:name=".widget.DotWidget"
+            android:exported="true"
+            android:label="Dot">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_dot_info" />
+        </receiver>
+
+        <service
+            android:name=".widget.DotTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile"
+            android:label="Dot"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.service.quicksettings.ACTIVE_TILE"
+                android:value="true" />
+        </service>
+
         <service
             android:name=".playback.DotService"
             android:exported="true"
