@@ -37,6 +37,9 @@ class DspParams {
     @Volatile var makeupDb = 0f
     @Volatile var levelling = false
     @Volatile var vibe = Vibe.Off
+    /** -1 = all left, 1 = all right. */
+    @Volatile var balance = 0f
+    @Volatile var mono = false
     @Volatile var version = 0
         private set
 
@@ -51,7 +54,7 @@ class DspParams {
 /**
  * Dot's own audio chain, running inside ExoPlayer on 16-bit PCM:
  * preamp (automatic headroom) → 10-band EQ → bass shelf → stereo width / 8D / karaoke →
- * reverb → volume levelling → makeup gain → limiter. Processing is in float; the limiter and a
+ * reverb → volume levelling → makeup gain → mono / balance → limiter. Processing is in float; the limiter and a
  * final soft clip mean boosted settings never crackle.
  */
 @OptIn(UnstableApi::class)
@@ -174,6 +177,16 @@ class DotDsp(private val params: DspParams) : BaseAudioProcessor() {
 
             l *= makeup
             r *= makeup
+
+            if (stereo) {
+                if (params.mono) {
+                    val m = (l + r) * 0.5f
+                    l = m
+                    r = m
+                }
+                val b = params.balance
+                if (b > 0f) l *= 1f - b else if (b < 0f) r *= 1f + b
+            }
 
             // Peak limiter: instant attack, ~120 ms release, then a soft clip for safety.
             val peak = max(abs(l), abs(r))

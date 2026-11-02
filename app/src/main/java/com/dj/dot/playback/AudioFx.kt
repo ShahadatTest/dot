@@ -22,9 +22,11 @@ class AudioFx {
         reverbIndex: Int,
         levelling: Boolean,
         vibe: Vibe,
+        balance: Int = 0,
+        mono: Boolean = false,
     ) {
         val reverb = if (vibe == Vibe.Slowed) SLOWED_REVERB else reverbs.getOrNull(reverbIndex)?.second?.takeIf { enabled }
-        params.enabled = enabled || levelling || vibe != Vibe.Off
+        params.enabled = enabled || levelling || vibe != Vibe.Off || balance != 0 || mono
         params.bands = FloatArray(bandCount) { if (enabled) levels.getOrElse(it) { 0 } / 100f else 0f }
         params.bassDb = if (enabled) bassStrength.coerceIn(0, 1000) / 1000f * 10f else 0f
         params.width = if (enabled) 1f + surround.coerceIn(0, 1000) / 1000f * 1.2f else 1f
@@ -34,6 +36,8 @@ class AudioFx {
         params.makeupDb = if (enabled) loudnessMb.coerceIn(0, 1200) / 100f else 0f
         params.levelling = levelling
         params.vibe = vibe
+        params.balance = balance.coerceIn(-100, 100) / 100f
+        params.mono = mono
         params.commit()
     }
 
