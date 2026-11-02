@@ -243,6 +243,8 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
     var dragX by remember { mutableFloatStateOf(0f) }
     var flash by remember { mutableStateOf<String?>(null) }
     var hearts by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    // The tap handler outlives song changes, so it reads the song through this.
+    val currentSong by androidx.compose.runtime.rememberUpdatedState(song)
     val haptic = androidx.compose.ui.platform.LocalHapticFeedback.current
     LaunchedEffect(flash) { if (flash != null) { delay(1100); flash = null } }
 
@@ -272,7 +274,7 @@ private fun ArtPanel(song: com.dj.dot.data.Song, playing: Boolean, showViz: Bool
                         },
                         // Double-tap only ever likes, never unlikes.
                         onDoubleTap = {
-                            if (song.id !in dot.store.favourites.value) dot.store.toggleFavourite(song.id)
+                            if (currentSong.id !in dot.store.favourites.value) dot.store.toggleFavourite(currentSong.id)
                             haptic.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                             hearts++
                         },
