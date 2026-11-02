@@ -265,6 +265,8 @@ fun EqualizerScreen() {
             }
         }
 
+        item { HeadphonesCard() }
+
         item { Section("Balance") }
         item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
@@ -407,6 +409,67 @@ private fun EffectCard(name: String, note: String, selected: Boolean, modifier: 
         }
         Spacer(Modifier.height(4.dp))
         Text(note, color = if (selected) Dot.Black.copy(alpha = 0.6f) else Dot.Muted, style = MonoSmall, maxLines = 1)
+    }
+}
+
+/** Connected earphones with their reported battery, or a button to allow reading it. */
+@Composable
+private fun HeadphonesCard() {
+    val dot = DotApp.instance
+    val hp = dot.headphones
+    val info by hp.connected.collectAsStateWithLifecycle()
+    var allowed by remember { mutableStateOf(hp.hasPermission()) }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        allowed = granted
+        if (granted) hp.start()
+    }
+    Section("Earphones")
+    Column(
+        Modifier.padding(horizontal = 20.dp).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Dot.Surface2).padding(16.dp),
+    ) {
+        val current = info
+        when {
+            !allowed -> {
+                Text("See your earphones' battery", color = Dot.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text("Needs the Nearby devices permission", color = Dot.Muted, style = MonoSmall)
+                Spacer(Modifier.height(10.dp))
+                Pill("Allow", { if (android.os.Build.VERSION.SDK_INT >= 31) ask.launch(android.Manifest.permission.BLUETOOTH_CONNECT) }, accent = true)
+            }
+            current == null -> {
+                Text("No Bluetooth earphones connected", color = Dot.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text("Connect them and their battery shows here", color = Dot.Muted, style = MonoSmall)
+            }
+            else -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        DotTitle(current.name, size = 20.sp)
+                        Text(
+                            if (current.battery != null) "Battery reported by the earphones" else "These earphones don't report battery to Android",
+                            color = Dot.Muted, style = MonoSmall,
+                        )
+                    }
+                    current.battery?.let { DotTitle("$it%", size = 26.sp, color = if (it <= 20) Dot.Red else Dot.White) }
+                }
+                current.battery?.let { level ->
+                    Spacer(Modifier.height(10.dp))
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(10.dp)) {
+                        val n = 20
+                        val step = size.width / n
+                        for (i in 0 until n) {
+                            val lit = i < (level * n + 50) / 100
+                            drawCircle(
+                                if (!lit) Dot.Faint else if (level <= 20) Dot.Red else Dot.White,
+                                3.dp.toPx(), androidx.compose.ui.geometry.Offset(step * i + step / 2, size.height / 2),
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text("Separate left, right and case levels are only available to system apps.", color = Dot.Muted, style = MonoSmall)
+            }
+        }
     }
 }
 
