@@ -93,11 +93,16 @@ fun PlaylistScreen(id: String) {
         }
         else -> {
             val playlist = playlists.firstOrNull { it.id == id } ?: return Missing()
-            val songs = remember(lib, playlist) { playlist.songIds.mapNotNull { lib.byId[it] } }
+            // Songs missing from the library are skipped, so remember where each row sits in the playlist.
+            val rows = remember(lib, playlist) {
+                playlist.songIds.withIndex().mapNotNull { (i, songId) -> lib.byId[songId]?.let { i to it } }
+            }
+            val songs = remember(rows) { rows.map { it.second } }
             var renaming by remember { mutableStateOf(false) }
             var menu by remember { mutableStateOf(false) }
             SongListScreen(
                 playlist.name, "${songs.size} songs", songs, cover = songs.firstOrNull(), playlistId = playlist.id,
+                playlistIndex = { rows[it].first },
                 actions = {
                     Box {
                         IconBtn(Icons.Rounded.MoreVert, { menu = true })
@@ -134,6 +139,7 @@ private fun SongListScreen(
     coverShape: Shape = RoundedCornerShape(20.dp),
     trackNumbers: Boolean = false,
     playlistId: String? = null,
+    playlistIndex: (Int) -> Int = { it },
     actions: @Composable () -> Unit = {},
 ) {
     val dot = DotApp.instance
@@ -166,7 +172,7 @@ private fun SongListScreen(
             SongRow(
                 s, s.id == currentId,
                 onClick = { dot.engine.playSongs(songs, i) },
-                onMore = { app.menu = SongMenu(s, playlistId, i) },
+                onMore = { app.menu = SongMenu(s, playlistId, playlistIndex(i)) },
                 leading = if (trackNumbers) {
                     {
                         Box(Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) {

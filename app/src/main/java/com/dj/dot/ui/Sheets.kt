@@ -102,7 +102,7 @@ fun SongMenuSheet(menu: SongMenu, onDismiss: () -> Unit) {
             }
             if (menu.playlistId != null && !menu.playlistId.startsWith("smart:") && menu.index >= 0) {
                 SheetItem("Remove from playlist", Icons.Rounded.Delete, red = true) {
-                    done { dot.store.removeAt(menu.playlistId, menu.index) }
+                    done { dot.store.removeAt(menu.playlistId, menu.index, song.id) }
                 }
             }
         }

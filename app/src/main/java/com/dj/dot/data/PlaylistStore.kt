@@ -76,7 +76,10 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
         val existing = p.songIds.toHashSet()
         p.copy(songIds = p.songIds + songIds.filter { existing.add(it) })
     }
-    fun removeAt(id: String, index: Int) = edit(id) { p -> p.copy(songIds = p.songIds.filterIndexed { i, _ -> i != index }) }
+    /** Removes the entry at [index], but only if it is still [songId], so a stale index can't hit another song. */
+    fun removeAt(id: String, index: Int, songId: Long) = edit(id) { p ->
+        if (p.songIds.getOrNull(index) != songId) p else p.copy(songIds = p.songIds.filterIndexed { i, _ -> i != index })
+    }
     fun move(id: String, from: Int, to: Int) = edit(id) { p ->
         val l = p.songIds.toMutableList()
         if (from in l.indices && to in l.indices) l.add(to, l.removeAt(from))
