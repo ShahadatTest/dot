@@ -1,6 +1,6 @@
 # Dot
 
-[![Build](https://github.com/dhananjay6561/dot/actions/workflows/build.yml/badge.svg)](https://github.com/dhananjay6561/dot/actions/workflows/build.yml)
+[![Build](https://github.com/dhananjay6561/dot/actions/workflows/build.yml/badge.svg?branch=main&event=push)](https://github.com/dhananjay6561/dot/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/dhananjay6561/dot?color=D71921&label=release)](https://github.com/dhananjay6561/dot/releases/latest)
 [![License](https://img.shields.io/github/license/dhananjay6561/dot?color=111111)](LICENSE)
 ![Android 10+](https://img.shields.io/badge/Android-10%2B-111111)
