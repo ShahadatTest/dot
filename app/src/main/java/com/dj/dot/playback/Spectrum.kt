@@ -26,7 +26,11 @@ import kotlin.math.sqrt
  * the recent mean by a few standard deviations, with a refractory gap so one hit can't fire twice.
  */
 @OptIn(UnstableApi::class)
-class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
+class Spectrum(
+    val bands: Int = 18,
+    /** Timestamps for analysed frames; injectable so tests can run faster than real time. */
+    private val clock: () -> Long = System::nanoTime,
+) : TeeAudioProcessor.AudioBufferSink {
     private val users = java.util.concurrent.atomic.AtomicInteger(0)
     private val waveUsers = java.util.concurrent.atomic.AtomicInteger(0)
     /** True while at least one visualizer or the Glyph lights is listening. */
@@ -203,7 +207,7 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
         for (i in 0 until n) { re[i] = ring[i] * window[i]; im[i] = 0f }
         fft()
         for (i in 0 until n / 2) binMag[i] = sqrt(re[i] * re[i] + im[i] * im[i])
-        val now = System.nanoTime()
+        val now = clock()
         val binHz = sampleRate.toFloat() / n
 
         // Levels
