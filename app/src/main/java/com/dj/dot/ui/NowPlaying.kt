@@ -158,10 +158,10 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
                     val format by engine.format.collectAsStateWithLifecycle()
-                    format?.let {
-                        Box(
-                            Modifier.padding(top = 6.dp).border(1.dp, Dot.Line, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp),
-                        ) { Label(it) }
+                    val earphones by dot.headphones.connected.collectAsStateWithLifecycle()
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        format?.let { Chip(it) }
+                        earphones?.battery?.let { Chip("Earbuds $it%", red = it <= 20) }
                     }
                 }
                 val fav = song.id in favs
@@ -462,5 +462,12 @@ private fun SeekSection() {
     Row(Modifier.fillMaxWidth()) {
         Label(formatTime(pos), Modifier.weight(1f))
         Label("-" + formatTime(dur - pos))
+    }
+}
+
+@Composable
+private fun Chip(text: String, red: Boolean = false) {
+    Box(Modifier.border(1.dp, if (red) Dot.Red else Dot.Line, CircleShape).padding(horizontal = 10.dp, vertical = 3.dp)) {
+        Label(text, color = if (red) Dot.Red else Dot.Muted)
     }
 }
