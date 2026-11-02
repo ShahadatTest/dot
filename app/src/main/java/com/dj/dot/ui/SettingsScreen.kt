@@ -46,6 +46,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dj.dot.DotApp
+import com.dj.dot.data.PlaylistStore
 import com.dj.dot.playback.AudioFx
 import com.dj.dot.playback.GlyphMode
 import com.dj.dot.playback.LyricsParser
@@ -457,11 +458,20 @@ private fun BackupRows() {
                 Pill("Restore", {
                     pendingRestore = null
                     scope.launch {
-                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            runCatching { context.contentResolver.openInputStream(uri)!!.bufferedReader().use { it.readText() } }
+                        val lib = dot.library.data.value
+                        // Read with a cap and parse off the main thread; nothing changes unless the whole file checks out.
+                        val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                            runCatching {
+                                val bytes = context.contentResolver.openInputStream(uri)!!.use { readCapped(it, PlaylistStore.MAX_BACKUP_BYTES + 1) }
+                                if (bytes.size > PlaylistStore.MAX_BACKUP_BYTES) return@runCatching null
+                                PlaylistStore.parseBackup(String(bytes), lib)
+                            }
                         }
-                        result.mapCatching { dot.store.restoreJson(it, dot.library.data.value) }
-                            .onSuccess { toast("Restored · $it songs matched") }
+                        result
+                            .onSuccess { backup ->
+                                if (backup == null) toast("That file is too big to be a Dot backup")
+                                else { dot.store.restore(backup); toast("Restored · ${backup.matched} songs matched") }
+                            }
                             .onFailure { toast("That file isn't a Dot backup") }
                     }
                 }, accent = true)
@@ -618,4 +628,16 @@ private fun SliderRow(
         Spacer(Modifier.height(4.dp))
         DotSlider(fraction, onChange, live = live, steps = steps, bubble = { value })
     }
+}
+
+/** Reads at most [limit] bytes, so a huge file can't be pulled into memory. */
+private fun readCapped(input: java.io.InputStream, limit: Long): ByteArray {
+    val out = java.io.ByteArrayOutputStream()
+    val buf = ByteArray(8192)
+    while (out.size() < limit) {
+        val n = input.read(buf, 0, minOf(buf.size.toLong(), limit - out.size()).toInt())
+        if (n < 0) break
+        out.write(buf, 0, n)
+    }
+    return out.toByteArray()
 }

@@ -175,36 +175,93 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
         return root.toString()
     }
 
-    /** Replaces playlists, favourites and stats with a backup. Returns how many songs were matched. */
-    fun restoreJson(json: String, lib: LibraryData): Int {
-        val root = JSONObject(json)
-        require(root.optString("app") == "dot") { "Not a Dot backup" }
-        val byPath = lib.songs.associateBy { it.path }
-        val byMeta = lib.songs.associateBy { "${it.title.lowercase()}|${it.artist.lowercase()}" }
-        val meta = root.optJSONObject("songs") ?: JSONObject()
-        val matched = HashSet<Long>()
-        fun idOf(path: String): Long? {
-            val song = byPath[path] ?: meta.optJSONArray(path)?.let { m -> byMeta["${m.optString(0).lowercase()}|${m.optString(1).lowercase()}"] }
-            return song?.id?.also { matched += it }
-        }
-        fun ids(arr: JSONArray?) = (0 until (arr?.length() ?: 0)).mapNotNull { idOf(arr!!.getString(it)) }
-        fun <T> map(obj: JSONObject?, read: (JSONObject, String) -> T): Map<Long, T> =
-            obj?.keys()?.asSequence()?.mapNotNull { k -> idOf(k)?.let { it to read(obj, k) } }?.toMap() ?: emptyMap()
+    /** A backup that has been fully read and checked, ready to replace the current data in one step. */
+    class Backup(
+        val playlists: List<Playlist>,
+        val favourites: Set<Long>,
+        val counts: Map<Long, Int>,
+        val listen: Map<Long, Long>,
+        val bpm: Map<Long, Int>,
+        val daily: Map<String, Long>?,
+        val hours: List<Long>?,
+        val since: Long?,
+        val matched: Int,
+    )
 
-        val pls = root.optJSONArray("playlists") ?: JSONArray()
-        _playlists.value = (0 until pls.length()).map { i ->
-            val o = pls.getJSONObject(i)
-            Playlist(UUID.randomUUID().toString(), o.getString("name"), ids(o.optJSONArray("songs")))
-        }
-        _favourites.value = ids(root.optJSONArray("favourites")).toSet()
-        _playCounts.value = map(root.optJSONObject("counts")) { o, k -> o.getInt(k) }
-        _listenMs.value = map(root.optJSONObject("listen")) { o, k -> o.getLong(k) }
-        _bpm.value = map(root.optJSONObject("bpm")) { o, k -> o.getInt(k) }
-        root.optJSONObject("daily")?.let { d -> _dailyMs.value = d.keys().asSequence().associateWith { d.getLong(it) } }
-        root.optJSONArray("hours")?.let { h -> _hourMs.value = List(24) { h.optLong(it) } }
-        trackingSince = root.optLong("since", trackingSince)
+    /**
+     * Replaces playlists, favourites and stats with a parsed [backup]. The data it replaces is kept in
+     * `library.json.before-restore` so a restore can be undone by hand.
+     */
+    fun restore(backup: Backup) {
+        val before = toJson()
+        scope.launch(io + NonCancellable) { runCatching { AtomicFile(File(dir, "library.json.before-restore")).write(before.toByteArray()) } }
+        _playlists.value = backup.playlists
+        _favourites.value = backup.favourites
+        _playCounts.value = backup.counts
+        _listenMs.value = backup.listen
+        _bpm.value = backup.bpm
+        backup.daily?.let { _dailyMs.value = it }
+        backup.hours?.let { _hourMs.value = it }
+        backup.since?.let { trackingSince = it }
         save()
-        return matched.size
+    }
+
+    companion object {
+        /** Real backups are a few hundred KB at most; anything far bigger isn't one. */
+        const val MAX_BACKUP_BYTES = 5L * 1024 * 1024
+        private const val MAX_NAME = 200
+        private const val MAX_DAYS = 20_000
+        private val dayKey = Regex("""\d{4}-\d{2}-\d{2}""")
+
+        /**
+         * Reads and checks a backup without touching any state. Throws if the file isn't a Dot backup
+         * or holds values Dot would never write.
+         */
+        fun parseBackup(json: String, lib: LibraryData): Backup {
+            val root = JSONObject(json)
+            require(root.optString("app") == "dot") { "Not a Dot backup" }
+            val byPath = lib.songs.associateBy { it.path }
+            val byMeta = lib.songs.associateBy { "${it.title.lowercase()}|${it.artist.lowercase()}" }
+            val meta = root.optJSONObject("songs") ?: JSONObject()
+            val matched = HashSet<Long>()
+            fun idOf(path: String): Long? {
+                val song = byPath[path] ?: meta.optJSONArray(path)?.let { m -> byMeta["${m.optString(0).lowercase()}|${m.optString(1).lowercase()}"] }
+                return song?.id?.also { matched += it }
+            }
+            fun ids(arr: JSONArray?) = (0 until (arr?.length() ?: 0)).mapNotNull { idOf(arr!!.getString(it)) }
+            fun <T> map(obj: JSONObject?, read: (JSONObject, String) -> T): Map<Long, T> =
+                obj?.keys()?.asSequence()?.mapNotNull { k -> idOf(k)?.let { it to read(obj, k) } }?.toMap() ?: emptyMap()
+            fun nonNegative(v: Long): Long { require(v >= 0) { "Negative value" }; return v }
+
+            val pls = root.optJSONArray("playlists") ?: JSONArray()
+            val playlists = (0 until pls.length()).map { i ->
+                val o = pls.getJSONObject(i)
+                val name = o.getString("name").trim().take(MAX_NAME).ifEmpty { "Playlist" }
+                Playlist(UUID.randomUUID().toString(), name, ids(o.optJSONArray("songs")).distinct())
+            }
+            val daily = root.optJSONObject("daily")?.let { d ->
+                require(d.length() <= MAX_DAYS) { "Too many days" }
+                d.keys().asSequence().associateWith { k ->
+                    require(dayKey.matches(k)) { "Bad day $k" }
+                    nonNegative(d.getLong(k))
+                }
+            }
+            val hours = root.optJSONArray("hours")?.let { h ->
+                require(h.length() <= 24) { "Bad hours" }
+                List(24) { nonNegative(h.optLong(it)) }
+            }
+            return Backup(
+                playlists = playlists,
+                favourites = ids(root.optJSONArray("favourites")).toSet(),
+                counts = map(root.optJSONObject("counts")) { o, k -> nonNegative(o.getInt(k).toLong()).toInt() },
+                listen = map(root.optJSONObject("listen")) { o, k -> nonNegative(o.getLong(k)) },
+                bpm = map(root.optJSONObject("bpm")) { o, k -> o.getInt(k).also { require(it in 30..300) { "Bad tempo" } } },
+                daily = daily,
+                hours = hours,
+                since = root.optLong("since", -1L).takeIf { it > 0 },
+                matched = matched.size,
+            )
+        }
     }
 
     private inline fun edit(id: String, crossinline f: (Playlist) -> Playlist) {
