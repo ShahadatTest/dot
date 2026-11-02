@@ -215,7 +215,7 @@ class DotEngine(
             merge(
                 settings.eqEnabled.flow, settings.eqLevels.flow, settings.bassBoost.flow,
                 settings.loudness.flow, settings.virtualizer.flow, settings.reverb.flow,
-                settings.levelling.flow, settings.vibe.flow,
+                settings.levelling.flow, settings.vibe.flow, settings.balance.flow, settings.mono.flow,
             ).collect {
                 applyFx()
                 players.forEach { it.playbackParameters = playbackParams() }
@@ -736,7 +736,7 @@ class DotEngine(
         fx.apply(
             settings.eqEnabled.value, parseLevels(settings.eqLevels.value), settings.bassBoost.value,
             settings.loudness.value, settings.virtualizer.value, settings.reverb.value,
-            settings.levelling.value, vibe(),
+            settings.levelling.value, vibe(), settings.balance.value, settings.mono.value,
         )
     }
 

@@ -47,6 +47,8 @@ class Settings(context: Context) {
     val reverb = int("reverb", 0)
     val soundEffect = string("sound_effect", "Hi-Fi")
     val levelling = bool("levelling", false)
+    val balance = int("balance", 0)
+    val mono = bool("mono", false)
     val vibe = int("vibe", 0)
 
     // Library & UI

@@ -217,6 +217,8 @@ fun EqualizerScreen() {
     val surround by s.virtualizer.flow.collectAsStateWithLifecycle()
     val reverb by s.reverb.flow.collectAsStateWithLifecycle()
     val levelling by s.levelling.flow.collectAsStateWithLifecycle()
+    val balance by s.balance.flow.collectAsStateWithLifecycle()
+    val mono by s.mono.flow.collectAsStateWithLifecycle()
     val vibe by s.vibe.flow.collectAsStateWithLifecycle()
     val levels = remember(raw) { dot.engine.parseLevels(raw) }
     val span = maxOf(-fx.range.first, fx.range.last).toFloat()
@@ -262,6 +264,27 @@ fun EqualizerScreen() {
                 }
             }
         }
+
+        item { Section("Balance") }
+        item {
+            Column(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Left / right", color = Dot.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Label(balanceLabel(balance), color = Dot.White, modifier = Modifier.clickable { s.balance.set(0) })
+                }
+                Text("Tap the value to centre", color = Dot.Muted, style = MonoSmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Label("L", color = Dot.White)
+                    DotSlider(
+                        (balance + 100) / 200f, { s.balance.set(((it * 40).roundToInt() * 5) - 100) },
+                        Modifier.weight(1f).padding(horizontal = 8.dp), live = true, steps = 40,
+                        bubble = { balanceLabel(((it * 40).roundToInt() * 5) - 100) },
+                    )
+                    Label("R", color = Dot.White)
+                }
+            }
+        }
+        item { SwitchRow("Mono", "Both ears get the full song; good with one earbud", mono) { s.mono.set(it) } }
 
         item { Section("Vibes") }
         item {
@@ -385,6 +408,12 @@ private fun EffectCard(name: String, note: String, selected: Boolean, modifier: 
         Spacer(Modifier.height(4.dp))
         Text(note, color = if (selected) Dot.Black.copy(alpha = 0.6f) else Dot.Muted, style = MonoSmall, maxLines = 1)
     }
+}
+
+private fun balanceLabel(b: Int) = when {
+    b == 0 -> "Centre"
+    b < 0 -> "L ${-b}%"
+    else -> "R $b%"
 }
 
 private fun formatHz(hz: Int) = if (hz >= 1000) "%.1fK".format(hz / 1000f).replace(".0K", "K") else "$hz"
