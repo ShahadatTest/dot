@@ -66,7 +66,8 @@ Grab **`Dot-1.1.0.apk`** from the [latest release](https://github.com/dhananjay6
 - Left/right balance and a mono switch, for one earbud or uneven hearing
 - Volume levelling, so quiet and loud tracks play at a similar level
 - **Vibes:** Slowed + Reverb, Nightcore, 8D (the song circles your head) and Karaoke (vocal remover)
-- Lossless formats: FLAC, ALAC, WAV, plus Opus, Vorbis, MP3 and AAC
+- Lossless formats: FLAC, ALAC, WAV, plus Opus, Vorbis, MP3 and AAC; surround files play untouched
+- Every change glides in over about 15 ms, so dragging a slider never clicks
 
 **Visuals**
 - Three cover styles, switched by tapping the art:
@@ -96,6 +97,7 @@ Grab **`Dot-1.1.0.apk`** from the [latest release](https://github.com/dhananjay6
 - Tap any line to jump there; scroll freely and it re-syncs on its own
 - Per-song timing offset for files that run early or late
 - Finds `.lrc` files even when their names don't match the song file exactly
+- Reads `.lrc` files only from the folders you pick in Settings, with no all-files access
 
 **Library**
 - Songs, albums, artists, folders and playlists
@@ -136,6 +138,7 @@ Grab **`Dot-1.1.0.apk`** from the [latest release](https://github.com/dhananjay6
 **Backup**
 - Back up playlists, favourites, play counts, listening stats and learned tempos to a file, and restore them later
 - Songs are matched by file path, then by title and artist, so a backup survives a phone reset or a new phone
+- A restore is checked in full before anything changes, and the data it replaces is kept as `library.json.before-restore`
 
 **System**
 - Keeps playing in the background and with the screen locked
@@ -211,10 +214,10 @@ flowchart TB
     subgraph Playback["Playback"]
         Engine["DotEngine<br/>queue · crossfade · focus · sleep"]
         Tracker["ListeningTracker<br/>listening time · tempo learning"]
-        P1["ExoPlayer A"]
-        P2["ExoPlayer B"]
-        Fx["DotDsp<br/>EQ · bass · width · reverb<br/>levelling · limiter · vibes"]
-        Spec["Spectrum<br/>FFT · beats · BPM · waveform"]
+        P1["ExoPlayer A<br/>DotDsp → tap A"]
+        P2["ExoPlayer B<br/>DotDsp → tap B"]
+        Fx["AudioFx<br/>settings → one DspConfig snapshot"]
+        Spec["Spectrum<br/>FFT · beats · BPM · waveform<br/>active player only"]
         Lyrics["Lyrics<br/>LRC · ID3 · Vorbis"]
     end
 
@@ -234,7 +237,8 @@ flowchart TB
     Engine --> P1 & P2
     Engine --> Tracker --> Store
     Engine --> Lyrics
-    P1 & P2 -- "PCM" --> Fx -- "processed PCM" --> Spec
+    Prefs --> Fx -- "DspConfig" --> P1 & P2
+    P1 & P2 -- "processed PCM" --> Spec
     Spec -- "levels · beats" --> NP & Overlays & Glyph
     Spec -- "BPM" --> Tracker
     Service <--> Engine
@@ -245,7 +249,9 @@ flowchart TB
 
 - **The UI never touches ExoPlayer.** Screens read `StateFlow`s and call methods on `DotEngine`, which owns both players.
 - **One code path for every control.** `DotService` wraps the engine in a Media3 `MediaSession`, so the notification, lock screen and headset buttons drive exactly the same methods as the app's buttons.
-- **The analyser is shared and reference-counted.** Visuals, the Glyph strip and tempo learning each acquire `Spectrum` while they need it. It does no work when nobody holds it, and skips the waveform when only the strip and tempo learning listen.
+- **The analyser is shared and reference-counted.** Visuals, the Glyph strip and tempo learning each acquire `Spectrum` while they need it. It does no work when nobody holds it, skips the waveform when only the strip and tempo learning listen, and on-screen visuals let go of it as soon as Dot leaves the screen.
+- **Each player has its own tap.** Only the active player's audio reaches the analyser, so a crossfade never blends two songs into one beat track.
+- **Settings cross threads as one snapshot.** `AudioFx` turns the sound settings into an immutable `DspConfig` and publishes it in a single write; each player's `DotDsp` reads it once per buffer.
 - **Overlays are plain composables.** Party mode, the bedside clock and the sheets sit on top of the navigation stack in `Root`, so they keep their own state and close with back.
 
 ### Data and persistence
@@ -258,7 +264,7 @@ flowchart LR
     Cache[("library_cache.json<br/>last scan + change key")]
     Lib[("library.json<br/>playlists · favourites · play counts<br/>listening time · tempos")]
     Prefs[("SharedPreferences<br/>settings · saved queue · lyric offsets")]
-    LRC[(".lrc files<br/>next to songs")]
+    LRC[(".lrc files<br/>in folders you picked")]
 
     MS -- "query on change" --> Library
     Cache -- "instant open" --> Library
@@ -272,7 +278,10 @@ flowchart LR
 
 - **Opening the app:** the library loads from `library_cache.json` straight away, then Dot compares MediaStore's change counter and filters with the cached key and only re-queries if something changed.
 - **While playing:** listening time is written at most once a minute; a song's tempo is written once, after its first play.
-- **Writes are debounced and atomic:** `library.json` is written to a temporary file and renamed, so a crash mid-write can't corrupt it.
+- **Writes are debounced and atomic:** `library.json` goes through `AtomicFile` on a single writer thread: it is synced to disk before it replaces the old file, and two saves can never overlap.
+- **Damage is recoverable:** each session keeps the file it started with as `library.json.prev` and falls back to it if the main file can't be read. An unreadable file is kept aside as `library.json.corrupt` rather than written over, and each section loads on its own so one bad field doesn't cost the rest.
+- **Restores are all or nothing:** a backup is read with a 5 MB cap, parsed and checked off the main thread, and only then swapped in, with the replaced data saved as `library.json.before-restore`.
+- **Lyrics files** are read through the Storage Access Framework from folders you grant, never through all-files access.
 
 ### Screens and overlays
 
@@ -317,6 +326,7 @@ sequenceDiagram
 - **Interruptible.** Skipping mid-fade cuts the old outgoing track and fades out from whatever volume the current one has reached.
 - **One audio focus owner.** The engine requests focus itself. Two players requesting it separately would pause each other.
 - **One audio session.** Both players share a session ID, so the equalizer applies to both sides of a fade.
+- **The analyser follows the incoming song.** When the roles swap, the beat tracker switches to the new player, so the blend's beats and tempo belong to one song.
 
 ## How the visualizer, beats and Glyph lights work
 
@@ -341,6 +351,7 @@ flowchart LR
 - **Levels.** Each 23 ms frame becomes 18 frequency bands, normalised against a slowly decaying peak so quiet and loud tracks both fill the grid.
 - **Beats.** Spectral flux measures how much energy *rose* since the previous frame, mostly in the 30 to 180 Hz kick range. A beat fires when that rise clears the recent average by a margin, with a refractory gap so one hit can't fire twice. The median gap between beats gives the BPM.
 - **Sync.** Audio is decoded ahead of the speaker by the output buffer. Every frame is timestamped and readers take the one that is audible now, not the one just decoded.
+- **Tempo learning.** Beats are timed as the audio plays, so under Slowed, Nightcore or a custom speed the measured tempo is scaled back to the song's own before it is saved.
 - **Glyph strip.** The low bands drive a six-LED meter with per-LED brightness, beats flash the whole strip, and frames are only sent over the binder when they visibly change.
 
 ## How the sound engine works
@@ -358,6 +369,8 @@ flowchart LR
 
 - **Headroom first.** The preamp pulls the signal down by most of the biggest boost, so the EQ and bass shelf can't overload. The limiter catches whatever is left, and a soft clip rounds off any final peak instead of crackling.
 - **Filters** are standard RBJ biquads; bands set to 0 dB are skipped entirely.
+- **No clicks, no allocations.** When a setting changes, filter coefficients glide to the new design over about 15 ms (interpolating stays stable because the stable region is convex), and preamp, loudness, width, reverb mix, balance and mono are smoothed per sample. Reverb delay lines are sized once per sample rate and only retuned, so the tail carries on through an EQ edit and nothing is allocated on the audio thread.
+- **Surround passes through.** Files with more than two channels skip the chain instead of failing.
 - **Panoramic** widens the side signal; **8D** pans the centre slowly around your head; **Karaoke** keeps the sides and only the low end of the centre, where most vocals sit.
 - **Slowed + Reverb** and **Nightcore** change speed and pitch together, like a record at the wrong speed, with a big room added for Slowed.
 - Both crossfading players run their own copy of the chain from shared settings, so effects carry straight through a blend.
@@ -369,7 +382,9 @@ Dot is built to stay light on battery and memory:
 - The engine tick runs only while music plays and sleeps completely when paused.
 - Visuals render at most 60 fps, even on 120 Hz screens, and stop once the music is paused and the dots have settled.
 - Dot art paints its halftone once into a bitmap; each frame only scales it and lights the ripple band.
-- The analyser runs only while a visual or the Glyph strip is using it; the waveform is skipped when only the strip listens.
+- The analyser runs only while a visual or the Glyph strip is using it, and visuals release it when Dot leaves the screen; the waveform is skipped when only the strip listens.
+- Changing a sound setting allocates nothing on the audio thread; settings are read once per buffer from an immutable snapshot.
+- Songs don't each hold a `Uri`; it is built from the id only when art or sharing needs it.
 - Analyser buffers are reused instead of reallocated on every frame.
 - Listening stats are written once a minute and on pause, not continuously.
 - The library opens from a cached index and only rescans when MediaStore's change counter moves.
@@ -443,20 +458,32 @@ app/src/main/java/com/dj/dot
     ├── DotWidget.kt       home-screen widget
     ├── DotTileService.kt  Quick Settings tile
     └── RemoteControl.kt   sends widget and tile commands through the media session
+
+app/src/test/java/com/dj/dot   JVM unit tests: store, restore, lyrics, tags, DSP, tempo
 ```
 
 ## Building
 
-Requirements: JDK 17 or newer and the Android SDK (platform 36).
+Requirements: JDK 17 or 21 and the Android SDK (platform 36).
 
 ```bash
 git clone https://github.com/dhananjay6561/dot.git
 cd dot
 echo "sdk.dir=/path/to/android/sdk" > local.properties
-./gradlew assembleRelease
+./gradlew assembleDebug
 ```
 
-The APK lands in `app/build/outputs/apk/release/`. The first build downloads the Nothing Glyph SDK from its [official repository](https://github.com/Nothing-Developer-Programme/Glyph-Developer-Kit) into `app/libs/`, since it isn't published to Maven.
+The first build downloads the Nothing Glyph SDK from a pinned commit of its [official repository](https://github.com/Nothing-Developer-Programme/Glyph-Developer-Kit) into `app/libs/`, since it isn't published to Maven, and fails if its SHA-256 doesn't match.
+
+Checks that CI runs on every push and pull request:
+
+```bash
+./gradlew lintRelease          # NewApi is fatal: anything above Android 10 must be guarded
+./gradlew testDebugUnitTest    # JVM unit tests
+./gradlew assembleRelease      # R8-shrunk release build
+```
+
+**Release builds** are never signed with the debug key. Without signing details `assembleRelease` gives an unsigned APK; see [CONTRIBUTING](CONTRIBUTING.md#release-builds) for the keystore and the Nothing Glyph API key.
 
 ## Installing on a phone
 
@@ -465,16 +492,16 @@ The APK lands in `app/build/outputs/apk/release/`. The first build downloads the
 3. Run:
 
 ```bash
-./gradlew installRelease
+./gradlew installDebug
 ```
 
-Or copy the APK to the phone and open it, allowing installs from that source when asked.
+`installRelease` works once release signing is set up. Or copy the APK to the phone and open it, allowing installs from that source when asked.
 
 ### Recommended on first launch
 
 - Allow music access when prompted.
 - **Settings → Keep playing in background** exempts Dot from battery optimisation, so the system never stops playback.
-- **Settings → Lyrics file access** is only needed if you keep `.lrc` files next to your songs.
+- **Settings → Lyrics folders** is only needed if you keep `.lrc` files next to your songs: pick the folders and Dot gets read access to those alone.
 - On a Nothing Phone (4a), open the Visuals button on Now Playing and pick a Glyph light mode.
 - Long-press your home screen to add the Dot widget, and edit Quick Settings to add the Dot tile.
 
@@ -489,9 +516,8 @@ Or copy the APK to the phone and open it, allowing installs from that source whe
 | `com.nothing.ketchum.permission.ENABLE` | Drive the Glyph lights on Nothing phones |
 | `BLUETOOTH_CONNECT` | Optional, asked from the Sound screen, to show the earphones' battery |
 | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Optional, asked from Settings |
-| `MANAGE_EXTERNAL_STORAGE` | Optional, only for `.lrc` files |
 
-Dot has no internet permission.
+Dot has no internet permission and no all-files access. `.lrc` files are read only from folders you choose in the system folder picker, which needs no permission.
 
 ## Roadmap
 
@@ -502,7 +528,7 @@ Dot has no internet permission.
 
 ## Contributing
 
-Bug reports, ideas and pull requests are welcome. Read the [contributing guide](CONTRIBUTING.md) first; this project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Security problems go through the [security policy](SECURITY.md), not public issues.
+Bug reports, ideas and pull requests are welcome. Read the [contributing guide](CONTRIBUTING.md) first. If you work with an AI coding agent, point it at [AGENTS.md](AGENTS.md), which holds the rules it must follow; this project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). Security problems go through the [security policy](SECURITY.md), not public issues.
 
 ## Credits
 
