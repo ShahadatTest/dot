@@ -157,12 +157,8 @@ fun NowPlayingScreen(onClose: () -> Unit) {
                         "${song.artist}  ·  ${song.album}", color = Dot.Muted, style = MonoSmall,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
-                    val format by engine.format.collectAsStateWithLifecycle()
                     val earphones by dot.headphones.connected.collectAsStateWithLifecycle()
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        format?.let { Chip(it) }
-                        earphones?.battery?.let { Chip("Earbuds $it%", red = it <= 20) }
-                    }
+                    earphones?.battery?.let { Box(Modifier.padding(top = 6.dp)) { Chip("Earbuds $it%", red = it <= 20) } }
                 }
                 val fav = song.id in favs
                 // Liking pops the heart; unliking just morphs back.
