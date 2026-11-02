@@ -111,6 +111,63 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
         save()
     }
 
+    /**
+     * A portable backup. Songs are keyed by file path with title and artist alongside, because
+     * MediaStore ids change after a reset or on a new phone.
+     */
+    fun exportJson(lib: LibraryData): String {
+        val used = HashSet<Long>()
+        fun key(id: Long): String? = lib.byId[id]?.path?.also { used += id }
+        val root = JSONObject()
+            .put("app", "dot").put("version", 1).put("exported", System.currentTimeMillis())
+            .put("playlists", JSONArray().apply {
+                _playlists.value.forEach { p -> put(JSONObject().put("name", p.name).put("songs", JSONArray(p.songIds.mapNotNull(::key)))) }
+            })
+            .put("favourites", JSONArray(_favourites.value.mapNotNull(::key)))
+            .put("counts", JSONObject().apply { _playCounts.value.forEach { (id, n) -> key(id)?.let { put(it, n) } } })
+            .put("listen", JSONObject().apply { _listenMs.value.forEach { (id, ms) -> key(id)?.let { put(it, ms) } } })
+            .put("bpm", JSONObject().apply { _bpm.value.forEach { (id, b) -> key(id)?.let { put(it, b) } } })
+            .put("daily", JSONObject().apply { _dailyMs.value.forEach { (k, v) -> put(k, v) } })
+            .put("hours", JSONArray(_hourMs.value))
+            .put("since", trackingSince)
+        root.put("songs", JSONObject().apply {
+            used.forEach { id -> lib.byId[id]?.let { put(it.path, JSONArray().put(it.title).put(it.artist)) } }
+        })
+        return root.toString()
+    }
+
+    /** Replaces playlists, favourites and stats with a backup. Returns how many songs were matched. */
+    fun restoreJson(json: String, lib: LibraryData): Int {
+        val root = JSONObject(json)
+        require(root.optString("app") == "dot") { "Not a Dot backup" }
+        val byPath = lib.songs.associateBy { it.path }
+        val byMeta = lib.songs.associateBy { "${it.title.lowercase()}|${it.artist.lowercase()}" }
+        val meta = root.optJSONObject("songs") ?: JSONObject()
+        val matched = HashSet<Long>()
+        fun idOf(path: String): Long? {
+            val song = byPath[path] ?: meta.optJSONArray(path)?.let { m -> byMeta["${m.optString(0).lowercase()}|${m.optString(1).lowercase()}"] }
+            return song?.id?.also { matched += it }
+        }
+        fun ids(arr: JSONArray?) = (0 until (arr?.length() ?: 0)).mapNotNull { idOf(arr!!.getString(it)) }
+        fun <T> map(obj: JSONObject?, read: (JSONObject, String) -> T): Map<Long, T> =
+            obj?.keys()?.asSequence()?.mapNotNull { k -> idOf(k)?.let { it to read(obj, k) } }?.toMap() ?: emptyMap()
+
+        val pls = root.optJSONArray("playlists") ?: JSONArray()
+        _playlists.value = (0 until pls.length()).map { i ->
+            val o = pls.getJSONObject(i)
+            Playlist(UUID.randomUUID().toString(), o.getString("name"), ids(o.optJSONArray("songs")))
+        }
+        _favourites.value = ids(root.optJSONArray("favourites")).toSet()
+        _playCounts.value = map(root.optJSONObject("counts")) { o, k -> o.getInt(k) }
+        _listenMs.value = map(root.optJSONObject("listen")) { o, k -> o.getLong(k) }
+        _bpm.value = map(root.optJSONObject("bpm")) { o, k -> o.getInt(k) }
+        root.optJSONObject("daily")?.let { d -> _dailyMs.value = d.keys().asSequence().associateWith { d.getLong(it) } }
+        root.optJSONArray("hours")?.let { h -> _hourMs.value = List(24) { h.optLong(it) } }
+        trackingSince = root.optLong("since", trackingSince)
+        save()
+        return matched.size
+    }
+
     private inline fun edit(id: String, crossinline f: (Playlist) -> Playlist) {
         _playlists.value = _playlists.value.map { if (it.id == id) f(it) else it }
         save()
