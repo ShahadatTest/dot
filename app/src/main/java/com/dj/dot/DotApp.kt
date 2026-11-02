@@ -30,6 +30,11 @@ class DotApp : Application() {
         val scope = MainScope()
         settings = Settings(this)
         store = PlaylistStore(this, scope)
+        // Tempos learned before 1.1.1 could be skewed by crossfades and playback speed; relearn them.
+        if (settings.tempoVersion.value < 2) {
+            store.clearBpm()
+            settings.tempoVersion.set(2)
+        }
         library = Library(this, scope, settings)
         engine = DotEngine(this, settings, store, library)
         val playing = engine.state.map { it.playing }.distinctUntilChanged().stateIn(scope, SharingStarted.Eagerly, false)

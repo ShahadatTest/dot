@@ -70,6 +70,9 @@ class Settings(context: Context) {
     fun lyricsOffset(songId: Long): Int = sp.getInt("lrc_off_$songId", 0)
     fun setLyricsOffset(songId: Long, ms: Int) = sp.edit().putInt("lrc_off_$songId", ms).apply()
 
+    /** Bumped when learned tempos from older versions can't be trusted and must be relearned. */
+    val tempoVersion = int("tempo_version", 1)
+
     // Restored session
     val queueIds = string("q_ids", "")
     val queueIndex = int("q_index", 0)

@@ -7,8 +7,15 @@ import com.dj.dot.data.PlaylistStore
  * Turns the engine's playback tick into listening statistics and learned tempos. Listening time
  * is flushed every minute, on pause and on every change of song; a song's tempo is learned from
  * its first 25 seconds and never measured again.
+ *
+ * Beats are timed as the audio is played, so at another [speed] the measured tempo is scaled by
+ * it; the stored tempo is always the song's own.
  */
-class ListeningTracker(private val store: PlaylistStore, private val spectrum: Spectrum) {
+class ListeningTracker(
+    private val store: PlaylistStore,
+    private val spectrum: Spectrum,
+    private val speed: () -> Float,
+) {
     private var listenSong = -1L
     private var listenAcc = 0L
     private var lastTick = SystemClock.uptimeMillis()
@@ -56,7 +63,7 @@ class ListeningTracker(private val store: PlaylistStore, private val spectrum: S
             tempoSince = now
             spectrum.resetTempo()
         } else if (now - tempoSince > 25_000 && spectrum.bpm > 0) {
-            store.setBpm(songId, spectrum.bpm)
+            store.setBpm(songId, songTempo(spectrum.bpm, speed()))
             stopLearningTempo()
         }
     }
@@ -65,4 +72,12 @@ class ListeningTracker(private val store: PlaylistStore, private val spectrum: S
         if (tempoListening) { spectrum.release(needsWave = false); tempoListening = false }
         tempoSong = -1L
     }
+}
+
+/** The song's own tempo from one measured at playback [speed], folded into the same 70–180 range. */
+internal fun songTempo(measured: Int, speed: Float): Int {
+    var t = measured / speed.coerceIn(0.25f, 4f).toDouble()
+    while (t < 70) t *= 2
+    while (t > 180) t /= 2
+    return kotlin.math.round(t).toInt()
 }

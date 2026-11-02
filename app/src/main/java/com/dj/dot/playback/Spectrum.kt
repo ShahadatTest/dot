@@ -84,6 +84,40 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
     val wavePoints = 64
     private var head = 0
 
+    /**
+     * Which player's audio is analysed. Each player gets its own [input]; the other one is ignored,
+     * so a crossfade never blends two songs into one beat track.
+     */
+    @Volatile var activeInput = 0
+    private var source = -1
+
+    /** The tap for player [id]; it remembers its own format, since both players run on their own threads. */
+    fun input(id: Int): TeeAudioProcessor.AudioBufferSink = object : TeeAudioProcessor.AudioBufferSink {
+        private var rate = 44100
+        private var chans = 2
+        private var enc = C.ENCODING_PCM_16BIT
+
+        override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
+            rate = sampleRateHz
+            chans = channelCount.coerceAtLeast(1)
+            enc = encoding
+            if (id == activeInput) synchronized(this@Spectrum) { configure(id, rate, chans, enc) }
+        }
+
+        override fun handleBuffer(buffer: ByteBuffer) {
+            if (id != activeInput) return
+            synchronized(this@Spectrum) {
+                if (source != id || sampleRate != rate || channels != chans || encoding != enc) configure(id, rate, chans, enc)
+                this@Spectrum.handleBuffer(buffer)
+            }
+        }
+    }
+
+    private fun configure(id: Int, sampleRateHz: Int, channelCount: Int, encoding: Int) {
+        source = id
+        flush(sampleRateHz, channelCount, encoding)
+    }
+
     @Synchronized
     override fun flush(sampleRateHz: Int, channelCount: Int, encoding: Int) {
         sampleRate = sampleRateHz

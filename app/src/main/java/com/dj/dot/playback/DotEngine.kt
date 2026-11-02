@@ -118,7 +118,7 @@ class DotEngine(
     val sleepAt: StateFlow<Long> = _sleepAt
 
     val spectrum = Spectrum()
-    private val tracker = ListeningTracker(store, spectrum)
+    private val tracker = ListeningTracker(store, spectrum) { active.playbackParameters.speed }
     private val audioSessionId = Util.generateAudioSessionIdV21(app)
     val fx = AudioFx()
 
@@ -137,7 +137,7 @@ class DotEngine(
         DefaultMediaSourceFactory(app, extractors)
     }
 
-    private val players = arrayOf(newPlayer(), newPlayer())
+    private val players = arrayOf(newPlayer(0), newPlayer(1))
     private var a = 0
     private val active: ExoPlayer get() = players[a]
     /** Mirrors the active player's playlist; edited in place so queue changes stay O(change). */
@@ -236,7 +236,7 @@ class DotEngine(
         }
     }
 
-    private fun newPlayer(): ExoPlayer {
+    private fun newPlayer(id: Int): ExoPlayer {
         val renderers = object : DefaultRenderersFactory(app) {
             override fun buildAudioSink(
                 context: Context,
@@ -244,7 +244,7 @@ class DotEngine(
                 enableAudioTrackPlaybackParams: Boolean,
             ): AudioSink = DefaultAudioSink.Builder(context)
                 // Dot's sound chain first, then the tap, so visuals see what you hear.
-                .setAudioProcessors(arrayOf<AudioProcessor>(DotDsp(fx.params), TeeAudioProcessor(spectrum)))
+                .setAudioProcessors(arrayOf<AudioProcessor>(DotDsp(fx.params), TeeAudioProcessor(spectrum.input(id))))
                 .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
                 .build()
         }
@@ -575,6 +575,7 @@ class DotEngine(
         out.pauseAtEndOfMediaItems = true
 
         a = inI
+        spectrum.activeInput = inI
         sessionPlayer = SessionPlayer(inc)
         onSessionPlayerChanged?.invoke(sessionPlayer)
         masterJob?.cancel()

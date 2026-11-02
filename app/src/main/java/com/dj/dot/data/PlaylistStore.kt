@@ -134,6 +134,12 @@ class PlaylistStore(context: Context, private val scope: CoroutineScope) {
         save()
     }
 
+    /** Forgets every learned tempo so songs are measured again. */
+    fun clearBpm() {
+        _bpm.value = emptyMap()
+        save()
+    }
+
     fun setBpm(songId: Long, bpm: Int) {
         _bpm.value = _bpm.value + (songId to bpm)
         save()
