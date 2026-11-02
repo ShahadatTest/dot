@@ -186,7 +186,7 @@ fun SettingsScreen() {
         item {
             Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
                 DotTitle("Dot", size = 28.sp)
-                Label("Version 1.0 · offline music player")
+                Label("Version ${com.dj.dot.BuildConfig.VERSION_NAME} · offline music player")
             }
         }
     }

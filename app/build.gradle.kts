@@ -14,8 +14,8 @@ android {
         applicationId = "com.dj.dot"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
         // Dot's UI is English and it ships for phones; drop library translations and other CPUs.
         androidResources.localeFilters += "en"
         ndk { abiFilters += "arm64-v8a" }
@@ -33,7 +33,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     packaging {
         resources.excludes += listOf(
             "META-INF/**/LICENSE.txt", "META-INF/*.version", "META-INF/*.kotlin_module",
