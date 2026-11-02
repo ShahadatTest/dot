@@ -324,7 +324,7 @@ fun EqualizerScreen() {
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    when (Vibe.entries[vibe]) {
+                    when (Vibe.entries.getOrElse(vibe) { Vibe.Off }) {
                         Vibe.Off -> " "
                         Vibe.Slowed -> "Slower, deeper, in a big room"
                         Vibe.Nightcore -> "Faster and higher, full energy"
