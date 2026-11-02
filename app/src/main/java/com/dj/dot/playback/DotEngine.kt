@@ -64,6 +64,9 @@ import kotlin.math.cos
 import kotlin.math.min
 import kotlin.math.sin
 
+/** How far decoded audio runs ahead of the speaker, roughly. */
+private const val DECODE_AHEAD_NS = 200_000_000L
+
 private val HEADPHONE_TYPES = setOf(
     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET,
     AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLE_HEADSET,
@@ -231,6 +234,8 @@ class DotEngine(
                     tracker.tick(_state.value.current?.id, active.isPlaying)
                 }
                 tracker.pause()
+                alignJob?.cancel()
+                stopBeatListening()
             }
         }
     }
@@ -495,9 +500,12 @@ class DotEngine(
 
     // ---- Crossfade ----------------------------------------------------------------------
 
+    private var beatListening = false
+    private var alignJob: Job? = null
+
     private fun autoCrossfadeTick() {
         val cf = settings.crossfadeMs.value.toLong()
-        if (cf <= 0 || !wantPlay || fadeJob?.isActive == true) return
+        if (cf <= 0 || !wantPlay || fadeJob?.isActive == true || alignJob?.isActive == true) return
         if (_state.value.repeat == Player.REPEAT_MODE_ONE) return
         val sleep = _sleepAt.value
         if (sleep != 0L && sleep - SystemClock.elapsedRealtime() <= cf + 1000) return
@@ -506,10 +514,49 @@ class DotEngine(
         val d = p.duration
         if (d == C.TIME_UNSET || d < 5000) return
         val remaining = ((d - p.currentPosition) / p.playbackParameters.speed).toLong()
-        if (remaining <= min(cf, d / 3)) {
-            val next = nextIndex() ?: return
-            crossfadeTo(next, remaining.coerceAtLeast(250))
+        val window = min(cf, d / 3)
+        val aligned = settings.beatAlignedFade.value
+
+        // Listen for beats over the last stretch of the song so the blend can land on one.
+        if (aligned && remaining <= window + 15_000 && !beatListening) {
+            spectrum.acquire(needsWave = false)
+            beatListening = true
         }
+        if (remaining > window) return
+        val next = nextIndex() ?: return
+
+        val waitMs = if (aligned) msToNextBeat(remaining) else 0L
+        stopBeatListening()
+        if (waitMs <= 0) {
+            crossfadeTo(next, remaining.coerceAtLeast(250))
+        } else {
+            alignJob = scope.launch {
+                delay(waitMs)
+                val left = ((active.duration - active.currentPosition) / active.playbackParameters.speed).toLong()
+                crossfadeTo(next, left.coerceAtLeast(250))
+            }
+        }
+    }
+
+    /**
+     * Milliseconds until the next audible beat of the current song, or 0 if the tempo isn't
+     * known well enough or waiting would eat too much of the fade.
+     */
+    private fun msToNextBeat(remainingMs: Long): Long {
+        val bpm = spectrum.bpm
+        val last = spectrum.lastBeatNanos()
+        if (bpm <= 0 || last == 0L) return 0L
+        val interval = 60_000_000_000L / bpm
+        val now = System.nanoTime()
+        val audibleLast = last + DECODE_AHEAD_NS
+        if (now - audibleLast > interval * 3) return 0L
+        val beatsAhead = ((now - audibleLast) / interval) + 1
+        val wait = (audibleLast + beatsAhead * interval - now) / 1_000_000
+        return if (wait in 1..min(interval / 1_000_000, remainingMs / 3)) wait else 0L
+    }
+
+    private fun stopBeatListening() {
+        if (beatListening) { spectrum.release(needsWave = false); beatListening = false }
     }
 
     private fun crossfadeTo(index: Int, durationMs: Long) {
@@ -572,6 +619,8 @@ class DotEngine(
     }
 
     private fun cancelFade() {
+        alignJob?.cancel()
+        stopBeatListening()
         if (fadeJob?.isActive == true) {
             fadeJob?.cancel()
             players[1 - a].stop()

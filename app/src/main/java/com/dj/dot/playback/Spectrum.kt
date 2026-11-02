@@ -62,7 +62,7 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
     private var fluxSum = 0f
     private var fluxSumSq = 0f
     private var prevFlux = 0f
-    private var lastBeatNs = 0L
+    @Volatile private var lastBeatNs = 0L
     private val beatTimes = LongArray(16)
     private var beatHead = 0
     private var beatCount = 0
@@ -134,6 +134,9 @@ class Spectrum(val bands: Int = 18) : TeeAudioProcessor.AudioBufferSink {
         }
         return null
     }
+
+    /** When the most recent beat was decoded (nanoTime), 0 if none yet. */
+    fun lastBeatNanos(): Long = lastBeatNs
 
     /** Starts a fresh tempo estimate, used when a new song begins. */
     @Synchronized

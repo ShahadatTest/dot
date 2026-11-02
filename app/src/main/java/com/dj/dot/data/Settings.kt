@@ -34,6 +34,7 @@ class Settings(context: Context) {
     val skipFadeMs = int("skip_fade_ms", 1200)
     val fadeOnSkip = bool("fade_skip", true)
     val fadeOnPause = bool("fade_pause", true)
+    val beatAlignedFade = bool("beat_fade", true)
     val speed = float("speed", 1f)
 
     // Sound
