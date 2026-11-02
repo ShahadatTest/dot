@@ -29,7 +29,7 @@ class DotApp : Application() {
         instance = this
         val scope = MainScope()
         settings = Settings(this)
-        store = PlaylistStore(this, scope)
+        store = PlaylistStore(filesDir, scope)
         // Tempos learned before 1.1.1 could be skewed by crossfades and playback speed; relearn them.
         if (settings.tempoVersion.value < 2) {
             store.clearBpm()

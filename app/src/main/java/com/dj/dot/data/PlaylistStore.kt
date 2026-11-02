@@ -1,6 +1,5 @@
 package com.dj.dot.data
 
-import android.content.Context
 import androidx.core.util.AtomicFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,8 +17,7 @@ import java.io.File
 import java.util.UUID
 
 /** Playlists, favourites and play counts, stored as one small JSON file. */
-class PlaylistStore(context: Context, private val scope: CoroutineScope) {
-    private val dir = context.filesDir
+class PlaylistStore(private val dir: File, private val scope: CoroutineScope) {
     private val file = AtomicFile(File(dir, "library.json"))
     /** The file as it was when this session started, kept in case the main one gets damaged. */
     private val previous = AtomicFile(File(dir, "library.json.prev"))

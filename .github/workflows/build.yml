@@ -16,6 +16,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      # Only set on pushes to this repo; pull requests from forks build unsigned with the test Glyph key.
+      DOT_KEYSTORE_BASE64: ${{ secrets.DOT_KEYSTORE_BASE64 }}
+      DOT_KEYSTORE_PASSWORD: ${{ secrets.DOT_KEYSTORE_PASSWORD }}
+      DOT_KEY_ALIAS: ${{ secrets.DOT_KEY_ALIAS }}
+      DOT_KEY_PASSWORD: ${{ secrets.DOT_KEY_PASSWORD }}
+      NOTHING_API_KEY: ${{ secrets.NOTHING_API_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,11 +33,34 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Prepare release signing
+        if: env.DOT_KEYSTORE_BASE64 != ''
+        run: |
+          echo "$DOT_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/dot-release.jks"
+          echo "DOT_KEYSTORE=$RUNNER_TEMP/dot-release.jks" >> "$GITHUB_ENV"
+
+      - name: Lint
+        run: ./gradlew lintRelease --stacktrace
+
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
       - name: Build
-        run: ./gradlew assembleDebug --stacktrace
+        run: ./gradlew assembleDebug assembleRelease --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reports
+          path: |
+            app/build/reports/lint-results-release.html
+            app/build/reports/tests/
+          retention-days: 14
 
       - uses: actions/upload-artifact@v4
         with:
-          name: dot-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: dot-apks
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
           retention-days: 14

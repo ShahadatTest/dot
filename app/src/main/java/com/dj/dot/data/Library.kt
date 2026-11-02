@@ -1,6 +1,5 @@
 package com.dj.dot.data
 
-import android.content.ContentUris
 import android.content.Context
 import android.database.ContentObserver
 import android.os.Build
@@ -84,7 +83,6 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
                 id = id, title = a.getString(1), artist = a.getString(2), album = a.getString(3),
                 albumId = a.getLong(4), duration = a.getLong(5), track = a.getInt(6), year = a.getInt(7),
                 path = path, folder = path.substringBeforeLast('/', ""), dateAdded = a.getLong(9),
-                uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
             )
         }
         root.getString("key") to songs
@@ -140,7 +138,6 @@ class Library(private val context: Context, private val scope: CoroutineScope, p
                     path = path,
                     folder = path.substringBeforeLast('/', ""),
                     dateAdded = c.getLong(iAdded),
-                    uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
                 )
             }
         }

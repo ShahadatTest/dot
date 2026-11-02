@@ -66,7 +66,7 @@ class Headphones(private val context: Context) {
                 override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
                     val device = runCatching { proxy.connectedDevices.firstOrNull() }.getOrNull()
                     _connected.value = device?.let { d ->
-                        Info(runCatching { d.alias ?: d.name }.getOrNull() ?: "Earphones", batteryOf(d))
+                        Info(runCatching { (if (Build.VERSION.SDK_INT >= 30) d.alias else null) ?: d.name }.getOrNull() ?: "Earphones", batteryOf(d))
                     }
                     adapter.closeProfileProxy(profile, proxy)
                 }

@@ -64,6 +64,17 @@ android {
         compose = true
         buildConfig = true
     }
+    lint {
+        // An API above minSdk crashes on older phones, so fail the build rather than ship it.
+        fatal += "NewApi"
+        abortOnError = true
+        // Compose's detector for this check crashes on the current lint version.
+        disable += "AutoboxingStateCreation"
+    }
+    testOptions {
+        // Plain JVM tests: Android classes they touch in passing (Log, Uri) return defaults.
+        unitTests.isReturnDefaultValues = true
+    }
     packaging {
         resources.excludes += listOf(
             "META-INF/**/LICENSE.txt", "META-INF/*.version", "META-INF/*.kotlin_module",
@@ -115,4 +126,8 @@ dependencies {
     implementation("androidx.media3:media3-session:1.8.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation(files(glyphSdk))
+
+    testImplementation("junit:junit:4.13.2")
+    // The org.json in android.jar is a stub on the JVM; tests need the real one.
+    testImplementation("org.json:json:20250517")
 }
