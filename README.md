@@ -16,6 +16,19 @@ Dot plays the music that lives on your phone. No accounts, no streaming, no ads,
 
 For comparison, most streaming music apps install at well over 100 MB.
 
+## Why Dot
+
+Most Nothing-styled players restyle a regular player. Dot is built around Nothing's design and hardware from the ground up:
+
+- **The Glyph strip is part of the player.** Meter, Pulse and Progress modes with brightness, sensitivity and beat flash, plus a live on-screen mirror of the lights.
+- **It has its own sound engine.** Eight sound modes, a 10-band EQ, a limiter that stops boosted sound crackling, volume levelling, balance, and Vibes like 8D, Karaoke, Slowed + Reverb and Nightcore. It sounds the same on every phone.
+- **It shows the music.** Dot art, Halo and a scratchable Vinyl cover, Grid, Mirror and Wave visualizers, and a Party mode that builds its landscape from the song itself.
+- **Transitions feel mixed, not cut.** Crossfades start on the beat.
+- **Every detail is dot matrix.** Dot sliders, an analog sleep dial, karaoke lyrics and a bedside clock, all in Nothing's black, white and red.
+- **It knows how you listen.** Wrapped stats, mood mixes that learn each song's tempo, and gestures.
+
+All of it in a **1.8 MB download**, fully offline, with no accounts and no internet permission.
+
 ## Download
 
 Grab **`Dot-1.1.0.apk`** from the [latest release](https://github.com/dhananjay6561/dot/releases/latest), open it on your phone and allow installing from that source. Android 10 or newer.
