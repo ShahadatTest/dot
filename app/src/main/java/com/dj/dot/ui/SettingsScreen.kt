@@ -244,6 +244,8 @@ fun EqualizerScreen() {
     val balance by s.balance.flow.collectAsStateWithLifecycle()
     val mono by s.mono.flow.collectAsStateWithLifecycle()
     val vibe by s.vibe.flow.collectAsStateWithLifecycle()
+    // A stale or restored preference can be out of range: treat it as Off, like the engine does.
+    val vibeIndex = if (vibe in Vibe.entries.indices) vibe else 0
     val levels = remember(raw) { dot.engine.parseLevels(raw) }
     val span = maxOf(-fx.range.first, fx.range.last).toFloat()
 
@@ -319,12 +321,12 @@ fun EqualizerScreen() {
                 Spacer(Modifier.height(10.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(Vibe.entries.size) { i ->
-                        Pill(Vibe.entries[i].label, { s.vibe.set(i) }, selected = vibe == i, accent = vibe == i && i != 0)
+                        Pill(Vibe.entries[i].label, { s.vibe.set(i) }, selected = vibeIndex == i, accent = vibeIndex == i && i != 0)
                     }
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    when (Vibe.entries.getOrElse(vibe) { Vibe.Off }) {
+                    when (Vibe.entries[vibeIndex]) {
                         Vibe.Off -> " "
                         Vibe.Slowed -> "Slower, deeper, in a big room"
                         Vibe.Nightcore -> "Faster and higher, full energy"
